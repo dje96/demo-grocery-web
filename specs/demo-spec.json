@@ -1,0 +1,57 @@
+{
+  "demoName": "Basket",
+  "appId": "demo-grocery-web",
+  "focus": {
+    "type": "industry",
+    "value": "Grocery ecommerce"
+  },
+  "story": "Real-time personalization. A grocery shopper browses aisles, searches, and fills a basket. Snowplow creates the behavioral data as it happens; Signals computes live shopper attributes from the stream. The demo shows how a grocery site can read purchase intent mid-session and adapt — surfacing the right offer, reassurance, or recommendation before the shopper abandons. Sets up a downstream layer where semantic judgments (what the shopper is actually trying to buy) are derived from the behavioral signal rather than from counts alone.",
+  "pages": [
+    {
+      "name": "Homepage",
+      "path": "/",
+      "description": "Storefront entry. Hero with delivery-slot prompt, featured aisles, seasonal promo rail, and a reorder-favourites strip.",
+      "functionality": "semi-functional",
+      "features": ["Aisle navigation", "Promo rail", "Global search bar", "Reorder favourites strip", "Add-to-cart from promo tiles"]
+    },
+    {
+      "name": "Category / Aisle",
+      "path": "/aisle/[slug]",
+      "description": "Product listing for an aisle (Produce, Dairy & Eggs, Bakery, Meat & Fish, Pantry, Frozen, Drinks, Household). Dense grid with filters and sort.",
+      "functionality": "semi-functional",
+      "features": ["Faceted filters (dietary, brand, price)", "Sort control", "In-aisle search", "Product grid", "Add-to-cart with quantity stepper"]
+    },
+    {
+      "name": "Product detail",
+      "path": "/product/[sku]",
+      "description": "Single product view with imagery, price per unit, nutrition and allergen panel, and related products.",
+      "functionality": "semi-functional",
+      "features": ["Product gallery", "Nutrition and allergen panel", "Quantity stepper", "Add-to-cart", "Related products rail"]
+    },
+    {
+      "name": "Cart",
+      "path": "/cart",
+      "description": "Real basket state. Line items with quantity edits, running subtotal, delivery threshold progress, and removal.",
+      "functionality": "fully-functional",
+      "features": ["Persistent basket state", "Quantity edit and remove", "Running subtotal and delivery threshold", "Promo code field", "Proceed to checkout"]
+    },
+    {
+      "name": "Checkout",
+      "path": "/checkout",
+      "description": "Multi-step conversion funnel: delivery slot selection, address, payment, confirmation.",
+      "functionality": "fully-functional",
+      "features": ["Delivery slot picker", "Address form", "Payment form (simulated)", "Order review", "Confirmation page"]
+    }
+  ],
+  "designReference": {
+    "type": "proposed",
+    "value": "industry-default",
+    "notes": "Modern grocery ecommerce: clean and fresh without being saccharine. Dense product grids with high information density (price per unit, dietary badges, stock state). Restrained colour — one confident produce-green accent against warm neutrals, colour reserved for price, promo and state. Asymmetric homepage layout, not a generic card-grid template."
+  },
+  "imageApproach": "icons-placeholders",
+  "customTracking": {
+    "needed": true,
+    "areas": ["Product interaction", "Cart behavior", "Checkout funnel", "Search behavior"]
+  },
+  "snowplowBaseline": true
+}

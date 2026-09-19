@@ -1,0 +1,23 @@
+{
+  "colors": {
+    "primary": "",
+    "secondary": "",
+    "accent": "",
+    "highlight": "",
+    "background": "",
+    "surface": "",
+    "surfaceRaised": "",
+    "border": "",
+    "heading": "",
+    "body": "",
+    "muted": "",
+    "inverse": ""
+  },
+  "typography": {
+    "headingFont": "",
+    "bodyFont": "",
+    "monoFont": ""
+  },
+  "radius": { "sm": "", "md": "", "lg": "", "full": "9999px" },
+  "notes": "Extracted from the design reference. Feeds tailwind.config.ts (keep the semantic key names)."
+}

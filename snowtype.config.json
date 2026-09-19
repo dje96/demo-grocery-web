@@ -1,0 +1,26 @@
+{
+  "organizationId": "b12539df-a711-42bd-bdfa-175308c55fd5",
+  "tracker": "@snowplow/browser-tracker",
+  "language": "typescript",
+  "outpath": "./src/snowtype",
+  "eventSpecificationIds": [],
+  "dataProductIds": [
+    "9e64295e-1e49-40d3-81b3-71a9b1873e84"
+  ],
+  "dataStructures": [],
+  "igluCentralSchemas": [],
+  "repositories": [],
+  "options": {
+    "commands": {
+      "generate": {
+        "instructions": true,
+        "validations": false,
+        "disallowDevSchemas": true
+      },
+      "update": {
+        "maximumBump": "minor",
+        "showOnlyProdUpdates": true
+      }
+    }
+  }
+}

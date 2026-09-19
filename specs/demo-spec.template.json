@@ -1,0 +1,19 @@
+{
+  "demoName": "",
+  "appId": "demo-<name>-web",
+  "focus": { "type": "company | industry", "value": "" },
+  "story": "One-paragraph narrative of what this demo shows and why.",
+  "pages": [
+    {
+      "name": "Homepage",
+      "path": "/",
+      "description": "",
+      "functionality": [],
+      "features": []
+    }
+  ],
+  "designReference": { "type": "url | screenshots | none", "value": "" },
+  "imageApproach": "scrape | ai | placeholder",
+  "customTracking": { "needed": false },
+  "snowplowBaseline": true
+}

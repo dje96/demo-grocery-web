@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Basket — Cold Chain</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #0C0E0D;
+    --secondary: #1B6B47;
+    --highlight: #D9F154;
+    --background: #FFFFFF;
+    --surface: #F4F6F5;
+    --border: #E3E7E5;
+    --border-strong: #D5DAD8;
+    --heading: #0C0E0D;
+    --body: #5B6260;
+    --muted: #8A918E;
+    --font-heading: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+    --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    background: var(--background); color: var(--body);
+    font-family: var(--font-sans); font-size: 15px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4 { font-family: var(--font-heading); color: var(--heading); margin: 0; font-weight: 700; }
+  .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .page { max-width: 1320px; margin: 0 auto; padding: 0 24px; }
+  .sec-label {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted); font-weight: 600;
+    padding: 28px 0 10px; border-top: 1px solid var(--border); margin-top: 36px;
+  }
+  .sec-label:first-of-type { border-top: 0; margin-top: 0; }
+
+  /* ---- intervention ---- */
+  .intervention {
+    background: var(--highlight); color: var(--primary);
+    font-size: 13px; font-weight: 500; text-align: center; padding: 9px 16px;
+  }
+  .intervention strong { font-family: var(--font-heading); font-weight: 700; }
+
+  /* ---- nav ---- */
+  .nav { border-bottom: 1px solid var(--border); background: var(--background); }
+  .nav-inner { display: flex; align-items: center; gap: 24px; height: 62px; }
+  .wordmark {
+    font-family: var(--font-heading); font-weight: 700; font-size: 20px;
+    letter-spacing: -0.05em; color: var(--primary); white-space: nowrap;
+  }
+  .search {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px;
+    border: 1.5px solid var(--border-strong); border-radius: 3px;
+    padding: 8px 12px; font-size: 13.5px; color: var(--muted); background: var(--background);
+  }
+  .nav-right { display: flex; align-items: center; gap: 14px; white-space: nowrap; }
+  .slot-chip {
+    font-family: var(--font-mono); font-size: 11.5px; font-weight: 500;
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 6px 10px; border-radius: 2px; color: var(--primary);
+  }
+  .slot-chip span { color: var(--muted); }
+  .basket-pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--primary); color: var(--highlight);
+    padding: 7px 12px; border-radius: 2px; font-size: 12.5px; font-weight: 600;
+  }
+  .basket-pill .num { font-size: 12.5px; font-weight: 700; }
+  .aisles {
+    display: flex; gap: 22px; height: 42px; align-items: center;
+    font-size: 13px; letter-spacing: 0.01em; overflow: hidden;
+  }
+  .aisles a { color: var(--body); text-decoration: none; white-space: nowrap; }
+  .aisles a.on { color: var(--primary); font-weight: 600; box-shadow: inset 0 -2px 0 var(--primary); padding-bottom: 12px; }
+
+  /* ---- hero band ---- */
+  .hero { display: grid; grid-template-columns: 65fr 35fr; gap: 24px; padding: 28px 0 0; }
+  @media (max-width: 860px) { .hero { grid-template-columns: 1fr; } }
+  .slot-card { background: var(--surface); border: 1px solid var(--border); border-radius: 3px; padding: 24px; }
+  .slot-card .eyebrow {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 10px;
+  }
+  .slot-card h1 { font-size: 40px; line-height: 1.1; letter-spacing: -0.035em; margin-bottom: 10px; }
+  .slot-card p { margin: 0 0 18px; font-size: 14px; max-width: 46ch; }
+  .slot-times { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+  .slot-times span {
+    font-family: var(--font-mono); font-size: 12px; background: var(--background);
+    border: 1px solid var(--border); padding: 7px 10px; border-radius: 2px; color: var(--primary);
+  }
+  .slot-times span.gone { color: var(--muted); text-decoration: line-through; }
+  .reorder { border: 1px solid var(--border); border-radius: 3px; padding: 18px; }
+  .reorder h3 { font-size: 15px; letter-spacing: -0.02em; margin-bottom: 4px; }
+  .reorder .sub { font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
+  .reorder-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 9px 0; border-top: 1px solid var(--border); font-size: 13px;
+  }
+  .reorder-row:first-of-type { border-top: 0; }
+  .reorder-row .nm { color: var(--primary); }
+  .reorder-row .pr { font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; color: var(--primary); }
+
+  /* ---- buttons ---- */
+  .btn {
+    display: inline-block; font-family: var(--font-sans); font-size: 13px; font-weight: 600;
+    padding: 9px 16px; border-radius: 2px; border: 1.5px solid transparent;
+    cursor: default; text-align: center; white-space: nowrap;
+  }
+  .btn-p { background: var(--primary); color: var(--highlight); }
+  .btn-s { background: transparent; color: var(--primary); border-color: var(--border-strong); }
+  .btn-t { background: transparent; color: var(--secondary); border: 0; padding: 9px 2px; font-weight: 500; }
+  .btns { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+  /* ---- product grid ---- */
+  .grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
+  @media (max-width: 1100px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 680px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .card { border: 1px solid var(--border); border-radius: 3px; background: var(--background); min-width: 0; }
+  .tile {
+    background: var(--surface); height: 118px; display: flex;
+    align-items: center; justify-content: center; position: relative;
+  }
+  .tile svg { width: 42px; height: 42px; stroke: var(--muted); fill: none; stroke-width: 1.5; }
+  .badge {
+    position: absolute; top: 8px; left: 8px; font-family: var(--font-mono);
+    font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
+    background: var(--highlight); color: var(--primary); padding: 3px 6px; border-radius: 2px;
+  }
+  .card-body { padding: 12px; }
+  .card .eyebrow {
+    font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 6px;
+  }
+  .card h4 { font-size: 14.5px; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 3px; }
+  .card .desc { font-size: 12px; color: var(--muted); margin: 0 0 10px; }
+  .card .prow { display: flex; align-items: baseline; gap: 7px; margin-bottom: 11px; }
+  .card .price { font-family: var(--font-mono); font-size: 17px; font-weight: 700; color: var(--primary); letter-spacing: -0.02em; }
+  .card .unit { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); }
+  .card .btn { display: block; width: 100%; }
+  .stepper {
+    display: flex; align-items: stretch; border: 1.5px solid var(--primary); border-radius: 2px; overflow: hidden;
+  }
+  .stepper button {
+    flex: 0 0 34px; border: 0; background: var(--background); color: var(--primary);
+    font-size: 15px; font-family: var(--font-mono); cursor: default; line-height: 1;
+  }
+  .stepper .qty {
+    flex: 1; text-align: center; font-family: var(--font-mono); font-size: 13px;
+    font-weight: 700; color: var(--primary); align-self: center; padding: 8px 0;
+  }
+
+  /* ---- type scale ---- */
+  .scale > div { margin-bottom: 12px; }
+  .scale .lbl { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+
+  /* ---- swatches ---- */
+  .sw-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
+  .sw .chip { height: 46px; border-radius: 3px; border: 1px solid rgba(12,14,13,0.10); margin-bottom: 6px; }
+  .sw .nm { font-size: 11px; font-weight: 600; color: var(--primary); }
+  .sw .hx { font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+
+  footer.site { border-top: 1px solid var(--border); margin-top: 48px; padding: 28px 0 56px; }
+  footer.site .cols { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 24px; }
+  @media (max-width: 680px) { footer.site .cols { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+  footer.site h5 { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0 0 10px; }
+  footer.site ul { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+  footer.site li { margin-bottom: 6px; color: var(--body); }
+</style>
+</head>
+<body>
+
+<div class="intervention">
+  Cart over the free-delivery threshold — <strong>your 18:00–19:00 slot is held for 10 minutes</strong>
+</div>
+
+<nav class="nav">
+  <div class="page">
+    <div class="nav-inner">
+      <div class="wordmark">Basket</div>
+      <div class="search">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        Search 12,000 products
+      </div>
+      <div class="nav-right">
+        <span class="slot-chip">Next slot <span>·</span> 18:00</span>
+        <span style="font-size:13px">Account</span>
+        <span class="basket-pill">Basket <span class="num">14</span></span>
+      </div>
+    </div>
+  </div>
+</nav>
+<div class="nav" style="border-top:0">
+  <div class="page">
+    <div class="aisles">
+      <a href="#" class="on">Produce</a><a href="#">Dairy &amp; Eggs</a><a href="#">Bakery</a>
+      <a href="#">Meat &amp; Fish</a><a href="#">Pantry</a><a href="#">Frozen</a>
+      <a href="#">Drinks</a><a href="#">Household</a>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+
+  <div class="hero">
+    <div class="slot-card">
+      <div class="eyebrow">Delivery</div>
+      <h1>Delivered in<br>under 60 minutes</h1>
+      <p>Pick a slot and we'll hold it while you shop. Free over <span class="num">£40</span>.</p>
+      <div class="slot-times">
+        <span class="gone">16:00–17:00</span><span class="gone">17:00–18:00</span>
+        <span>18:00–19:00</span><span>19:00–20:00</span><span>20:00–21:00</span>
+      </div>
+      <div class="btns"><span class="btn btn-p">Reserve 18:00 slot</span><span class="btn btn-s">See all slots</span></div>
+    </div>
+    <div class="reorder">
+      <h3>Buy again</h3>
+      <div class="sub">From your last <span class="num">3</span> orders</div>
+      <div class="reorder-row"><span class="nm">Semi-skimmed milk, 2L</span><span class="pr">£1.45</span></div>
+      <div class="reorder-row"><span class="nm">Sourdough bloomer</span><span class="pr">£2.80</span></div>
+      <div class="reorder-row"><span class="nm">Free-range eggs, 6</span><span class="pr">£2.20</span></div>
+      <div class="reorder-row"><span class="nm">Cherry tomatoes, 250g</span><span class="pr">£1.75</span></div>
+      <div style="margin-top:12px"><span class="btn btn-t">Add all four →</span></div>
+    </div>
+  </div>
+
+  <div class="sec-label">Product grid · 5-up at xl, 16px gap</div>
+  <div class="grid">
+
+    <div class="card">
+      <div class="tile"><span class="badge">OFFER</span>
+        <svg viewBox="0 0 24 24"><path d="M12 21c-4 0-7-3.5-7-8 0-3 2-5 4-5 1.2 0 2 .6 3 .6s1.8-.6 3-.6c2 0 4 2 4 5 0 4.5-3 8-7 8Z"/><path d="M12 8c0-2 1-4 3-4.5"/></svg>
+      </div>
+      <div class="card-body">
+        <div class="eyebrow">Produce</div>
+        <h4>Organic Hass Avocados</h4>
+        <p class="desc">Ripe &amp; ready · Pack of 4</p>
+        <div class="prow"><span class="price">£3.85</span><span class="unit">96p/ea</span></div>
+        <span class="btn btn-p">Add to basket</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="tile">
+        <svg viewBox="0 0 24 24"><path d="M8 3h8l-1 3v13a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2V6L8 3Z"/><path d="M9 9h6"/></svg>
+      </div>
+      <div class="card-body">
+        <div class="eyebrow">Dairy</div>
+        <h4>Semi-Skimmed Milk</h4>
+        <p class="desc">British · 2 litres</p>
+        <div class="prow"><span class="price">£1.45</span><span class="unit">73p/l</span></div>
+        <div class="stepper"><button>−</button><div class="qty">2</div><button>+</button></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="tile">
+        <svg viewBox="0 0 24 24"><path d="M4 13c0-4 3.5-7 8-7s8 3 8 7v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3Z"/><path d="M8 10.5c1-1 2.5-1 3.5 0M13 10.5c1-1 2.5-1 3.5 0"/></svg>
+      </div>
+      <div class="card-body">
+        <div class="eyebrow">Bakery</div>
+        <h4>Sourdough Bloomer</h4>
+        <p class="desc">Baked in store · 800g</p>
+        <div class="prow"><span class="price">£2.80</span><span class="unit">35p/100g</span></div>
+        <span class="btn btn-p">Add to basket</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="tile"><span class="badge">NEW</span>
+        <svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="5" ry="7"/><path d="M7 12c-2 0-4-1-4-1M17 12c2 0 4-1 4-1"/></svg>
+      </div>
+      <div class="card-body">
+        <div class="eyebrow">Produce</div>
+        <h4>Cherry Tomatoes</h4>
+        <p class="desc">On the vine · 250g</p>
+        <div class="prow"><span class="price">£1.75</span><span class="unit">70p/100g</span></div>
+        <span class="btn btn-p">Add to basket</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="tile">
+        <svg viewBox="0 0 24 24"><path d="M6 8h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8Z"/><path d="M9 8V5a3 3 0 0 1 6 0v3"/></svg>
+      </div>
+      <div class="card-body">
+        <div class="eyebrow">Pantry</div>
+        <h4>Cold-Pressed Olive Oil</h4>
+        <p class="desc">Extra virgin · 500ml</p>
+        <div class="prow"><span class="price">£6.50</span><span class="unit">£1.30/100ml</span></div>
+        <span class="btn btn-p">Add to basket</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="sec-label">Buttons</div>
+  <div class="btns">
+    <span class="btn btn-p">Add to basket</span>
+    <span class="btn btn-s">Continue shopping</span>
+    <span class="btn btn-t">View nutrition →</span>
+    <div class="stepper" style="width:120px"><button>−</button><div class="qty">3</div><button>+</button></div>
+  </div>
+
+  <div class="sec-label">Type scale</div>
+  <div class="scale">
+    <div><div class="lbl">Space Grotesk 700 · display 3rem</div><h1 style="font-size:3rem;letter-spacing:-0.04em;line-height:1.06">Everything for tonight</h1></div>
+    <div><div class="lbl">Space Grotesk 700 · h2 1.875rem</div><h2 style="font-size:1.875rem;letter-spacing:-0.03em">Fresh produce, picked today</h2></div>
+    <div><div class="lbl">Space Grotesk 700 · h4 1.0625rem</div><h4 style="font-size:1.0625rem">Organic Hass Avocados</h4></div>
+    <div><div class="lbl">IBM Plex Sans 400 · body 0.9375rem</div><p style="margin:0;max-width:62ch">Grown in Andalusia and delivered within 48 hours of picking. Ripe and ready to eat — no waiting on the windowsill.</p></div>
+    <div><div class="lbl">IBM Plex Mono · numerics, tabular</div><span class="num" style="font-size:17px;font-weight:700;color:var(--primary)">£3.85 &nbsp; 96p/ea &nbsp; £41.20 &nbsp; 18:00–19:00</span></div>
+  </div>
+
+  <div class="sec-label">Palette</div>
+  <div class="sw-row">
+    <div class="sw"><div class="chip" style="background:#FFFFFF"></div><div class="nm">background</div><div class="hx">#FFFFFF</div></div>
+    <div class="sw"><div class="chip" style="background:#F4F6F5"></div><div class="nm">surface</div><div class="hx">#F4F6F5</div></div>
+    <div class="sw"><div class="chip" style="background:#E3E7E5"></div><div class="nm">border</div><div class="hx">#E3E7E5</div></div>
+    <div class="sw"><div class="chip" style="background:#0C0E0D"></div><div class="nm">primary</div><div class="hx">#0C0E0D</div></div>
+    <div class="sw"><div class="chip" style="background:#5B6260"></div><div class="nm">body</div><div class="hx">#5B6260</div></div>
+    <div class="sw"><div class="chip" style="background:#8A918E"></div><div class="nm">muted</div><div class="hx">#8A918E</div></div>
+    <div class="sw"><div class="chip" style="background:#1B6B47"></div><div class="nm">accent</div><div class="hx">#1B6B47</div></div>
+    <div class="sw"><div class="chip" style="background:#D9F154"></div><div class="nm">highlight</div><div class="hx">#D9F154</div></div>
+  </div>
+
+  <footer class="site">
+    <div class="cols">
+      <div><h5>Shop</h5><ul><li>All aisles</li><li>Offers</li><li>Buy again</li><li>Seasonal</li></ul></div>
+      <div><h5>Delivery</h5><ul><li>Slots &amp; areas</li><li>Charges</li><li>Track an order</li></ul></div>
+      <div><h5>Help</h5><ul><li>Contact us</li><li>Returns</li><li>Allergens</li></ul></div>
+      <div><h5>About</h5><ul><li>Our suppliers</li><li>Sourcing</li><li>Careers</li></ul></div>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>

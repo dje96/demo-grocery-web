@@ -1,0 +1,97 @@
+{
+  "_direction": "Cold Chain — app-first grocery. Near-white surfaces, near-black type, one citrus signal colour reserved for state and intervention. Mono for prices, units and quantities. Sharp radii, dense grids, minimal chrome.",
+  "colors": {
+    "primary": "#0C0E0D",
+    "secondary": "#1B6B47",
+    "accent": "#1B6B47",
+    "highlight": "#D9F154",
+    "background": "#FFFFFF",
+    "surface": "#F4F6F5",
+    "surfaceRaised": "#FFFFFF",
+    "border": "#E3E7E5",
+    "borderStrong": "#D5DAD8",
+    "text": {
+      "primary": "#0C0E0D",
+      "secondary": "#5B6260",
+      "muted": "#8A918E",
+      "inverse": "#FFFFFF",
+      "link": "#1B6B47"
+    },
+    "status": {
+      "success": "#1B6B47",
+      "warning": "#B8761B",
+      "error": "#C0392B",
+      "info": "#1D5FA8"
+    }
+  },
+  "typography": {
+    "fontFamily": {
+      "heading": "'Space Grotesk', ui-sans-serif, system-ui, sans-serif",
+      "body": "'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif",
+      "mono": "'IBM Plex Mono', ui-monospace, monospace"
+    },
+    "fontSize": {
+      "display": "3rem",
+      "h1": "2.5rem",
+      "h2": "1.875rem",
+      "h3": "1.375rem",
+      "h4": "1.0625rem",
+      "h5": "0.9375rem",
+      "body": "0.9375rem",
+      "small": "0.8125rem",
+      "nav": "0.8125rem"
+    },
+    "fontWeight": {
+      "heading": "700",
+      "body": "400",
+      "medium": "500",
+      "bold": "700",
+      "light": "300"
+    },
+    "lineHeight": {
+      "heading": "1.12",
+      "body": "1.55",
+      "tight": "1.2"
+    },
+    "letterSpacing": {
+      "heading": "-0.035em",
+      "body": "0",
+      "wide": "0.12em"
+    }
+  },
+  "spacing": {
+    "xs": "0.25rem",
+    "sm": "0.5rem",
+    "md": "1rem",
+    "lg": "1.5rem",
+    "xl": "2.5rem",
+    "2xl": "4rem",
+    "section": "4.5rem",
+    "pageMaxWidth": "1320px"
+  },
+  "borderRadius": {
+    "sm": "0.125rem",
+    "md": "0.1875rem",
+    "lg": "0.375rem",
+    "full": "9999px"
+  },
+  "shadows": {
+    "sm": "0 1px 2px rgba(12, 14, 13, 0.06)",
+    "md": "0 4px 14px rgba(12, 14, 13, 0.08)",
+    "lg": "0 16px 40px rgba(12, 14, 13, 0.12)"
+  },
+  "componentPatterns": {
+    "nav": "Sticky, white, 1px bottom border. Three-zone: wordmark left, a wide search field taking the centre (search is the primary grocery navigation, not an afterthought), delivery-slot chip + account + basket-count pill right. A secondary aisle bar sits beneath it on desktop — horizontal scrolling list of aisle names in nav-size uppercase-tracking type, no icons, active aisle marked by a 2px underline in primary.",
+    "cards": "Product card: white on a #F4F6F5 page band or white page, 1px #E3E7E5 border, radius-md, no shadow at rest and shadow-sm on hover. Icon/illustration block at top on a #F4F6F5 tile. Content padding 1rem. Order is eyebrow (aisle, mono uppercase, muted) → name (Space Grotesk 700, tight tracking, max 2 lines) → pack description (small, muted) → price row. Price row is baseline-aligned flex: price in mono 700 left with unit price in mono small muted beside it, badge right. Add-to-basket is a full-width button at the card foot that becomes a mono quantity stepper once the item is in the basket.",
+    "buttons": {
+      "primary": "Solid #0C0E0D, text #D9F154, radius-sm, 0.5625rem 1rem padding, IBM Plex Sans 600, no shadow. Hover lifts background to #1E221F. The citrus-on-black is the demo's signature — do not use it for ordinary links.",
+      "secondary": "Transparent, 1.5px #D5DAD8 border, text #0C0E0D, same radius and padding. Hover darkens border to #0C0E0D.",
+      "text": "No border or fill, text #1B6B47, IBM Plex Sans 500, underline on hover."
+    },
+    "grid": "Product grid is the core layout. 2 columns at mobile, 3 at md, 4 at lg, 5 at xl within max-w-page. Gap 1rem — tight, so the grid reads as a dense catalogue rather than a spacious lookbook. Aisle pages put filters in a 240px left rail (sticky) against the grid, a 70/30-ish asymmetry, collapsing to a filter drawer below lg.",
+    "hero": "No giant marketing hero. The homepage opens with an asymmetric 65/35 band: left is a delivery-slot prompt with a live 'next slot' time in mono and a primary CTA; right is a compact reorder-favourites strip. Full-bleed promo imagery is avoided — the first product row must be visible above the fold on a laptop.",
+    "footer": "White, 1px top border, four link columns in small type with mono uppercase column headings, wordmark and delivery-area note on a final row. Restrained — no newsletter takeover.",
+    "dataDisplay": "All numerics use IBM Plex Mono with tabular figures: prices, unit prices, quantities, basket totals, delivery-threshold progress, slot times. This is the density signal that separates the design from a generic ecommerce template.",
+    "intervention": "Personalization interventions render as a single-line banner or an inline card slot using #D9F154 as the ground with #0C0E0D text — the only place the citrus appears as a large fill. Because the rest of the palette is monochrome, an intervention is unmistakable without being garish."
+  }
+}
