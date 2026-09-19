@@ -46,9 +46,8 @@
  * kept behind an explicit toggle in the Inspector so the tab still demos on a
  * pipeline where Signals has no data.
  *
- * Credentials stay server-side. The TypeSafe key is read from
- * TYPESAFE_JEV_API_KEY (the name this project uses) or TYPESAFE_API_KEY (the
- * SDK's own default name) and passed explicitly to the client.
+ * Credentials stay server-side. The TypeSafe key is read from TYPESAFE_API_KEY
+ * and passed explicitly to the client.
  */
 
 import { NextRequest } from 'next/server';
@@ -311,22 +310,17 @@ interface IntentSuccess {
 }
 
 export async function POST(request: NextRequest) {
-  // TYPESAFE_JEV_API_KEY is the name this project uses; TYPESAFE_API_KEY is the
-  // SDK's own default env name, accepted as a fallback. The key is resolved
-  // here and handed to the client explicitly, so the route never depends on the
-  // SDK's env lookup. A placeholder value (the `[YOUR-…]` in .env.example)
-  // counts as unset, so a freshly cloned demo degrades to "not configured"
-  // rather than failing with a 401 from TypeSafe.
-  const apiKey = (
-    process.env.TYPESAFE_JEV_API_KEY ??
-    process.env.TYPESAFE_API_KEY ??
-    ''
-  ).trim();
+  // TYPESAFE_API_KEY is the @typesafe-ai/sdk's own default env name. The key is
+  // resolved here and handed to the client explicitly, so the route never
+  // depends on the SDK's env lookup. A placeholder value (the `[YOUR-…]` in
+  // .env.example) counts as unset, so a freshly cloned demo degrades to "not
+  // configured" rather than failing with a 401 from TypeSafe.
+  const apiKey = (process.env.TYPESAFE_API_KEY ?? '').trim();
   if (!apiKey || apiKey.startsWith('[')) {
     return Response.json({
       configured: false,
       error:
-        'TYPESAFE_JEV_API_KEY is not set. Add it to .env to enable the Intent tab.',
+        'TYPESAFE_API_KEY is not set. Add it to .env to enable the Intent tab.',
     });
   }
 

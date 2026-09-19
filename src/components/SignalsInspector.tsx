@@ -817,7 +817,7 @@ function IntentPanel({
         <Gauge className="mb-3 h-10 w-10 opacity-50" />
         <p className="font-bold text-body">TypeSafe not configured</p>
         <p className="mt-1 text-center text-xs">
-          Add <code className="font-mono">TYPESAFE_JEV_API_KEY</code> to .env to enable
+          Add <code className="font-mono">TYPESAFE_API_KEY</code> to .env to enable
           the Intent tab.
         </p>
       </div>
