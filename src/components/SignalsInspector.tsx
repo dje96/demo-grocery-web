@@ -80,12 +80,13 @@ interface IntentResult {
   attributes?: Record<string, unknown>;
   error?: string;
   model?: string;
-  intent_score?: number;
   stage?: { choice: string; confidence: number; probabilities: Record<string, number> };
-  shop_type?: { choice: string; confidence: number; probabilities: Record<string, number> };
-  specific_product?: { noul: number; applied?: boolean };
-  blocker?: { noul: number };
+  occasion?: { choice: string; confidence: number; probabilities: Record<string, number> };
+  persona?: { label: string; confidence: number; traits: Record<string, number> };
   state?: unknown;
+  /** Ordered session narrative from the Signals Event Log (Agentic Context)
+   *  that Jev read as `session_timeline`. Absent when the buffer was empty. */
+  session_timeline?: string;
   usage?: { input_tokens: number; output_tokens: number };
   evaluated_at?: string;
 }
@@ -636,10 +637,9 @@ export default function SignalsInspector() {
 /* ---------------------------------------------------------------------------
  * Intent panel — TypeSafe (Jev)
  *
- * Shows the composite intent score (computed in /api/intent, never by the
- * model), the stage and shop-type choices with their full distributions, the
- * two Nouls, and the exact state
- * that was posted — so a presenter can show what Jev actually saw.
+ * Shows the stage and occasion choices with their full distributions, the
+ * persona trait nouls, and the exact state that was posted — so a presenter
+ * can show what Jev actually saw.
  * ------------------------------------------------------------------------- */
 
 function Bar({ value, accent }: { value: number; accent?: boolean }) {
@@ -905,7 +905,8 @@ function IntentPanel({
   }
 
   const stage = result.stage;
-  const shopType = result.shop_type;
+  const occasion = result.occasion;
+  const persona = result.persona;
 
   return (
     <div className="space-y-5">
@@ -916,37 +917,20 @@ function IntentPanel({
           ? 'built from this browser session (fallback)'
           : `built from Signals · ${result.service ?? siteConfig.snowplow.signalsService} · ${siteConfig.snowplow.signalsAttributeKey}`}
       </p>
-      {/* Composite */}
-      <IntentSection
-        title="purchase intent"
-        right={
-          <button
-            onClick={onRefresh}
-            disabled={loading}
-            className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-inverse disabled:opacity-60"
-          >
-            <RefreshCw className={`h-2.5 w-2.5 ${loading ? 'animate-spin' : ''}`} />
-            re-evaluate
-          </button>
-        }
-      >
-        <div className="mb-1.5 flex items-baseline justify-between gap-3">
-          <span className="font-mono text-[26px] font-bold leading-none tabular-nums tracking-tight text-heading">
-            {pct(result.intent_score ?? 0)}
-          </span>
-          <code className="font-mono text-[10px] text-muted">
-            {result.model ?? 'jev'}
-          </code>
-        </div>
-        <Bar value={result.intent_score ?? 0} accent />
-        <p className="mt-2 font-mono text-[9.5px] leading-relaxed text-muted">
-          {result.specific_product?.applied === false
-            ? 'P(ready_to_buy) — no searches this session, so the specific_product term is dropped rather than scored as zero'
-            : '0.7 × P(ready_to_buy) + 0.3 × specific_product'}
-          <br />
-          computed in code — the model is never asked to do arithmetic
-        </p>
-      </IntentSection>
+      {/* Header — model + re-evaluate */}
+      <div className="flex items-center justify-between gap-3">
+        <code className="font-mono text-[10px] text-muted">
+          {result.model ?? 'jev'}
+        </code>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-inverse disabled:opacity-60"
+        >
+          <RefreshCw className={`h-2.5 w-2.5 ${loading ? 'animate-spin' : ''}`} />
+          re-evaluate
+        </button>
+      </div>
 
       <hr className="border-border" />
 
@@ -978,58 +962,85 @@ function IntentPanel({
         </IntentSection>
       )}
 
-      {/* Shop type */}
-      {shopType && (
+      {/* Occasion */}
+      {occasion && (
         <IntentSection
-          title="shop_type · choice"
+          title="occasion · choice"
           right={
             <span className="font-mono text-[10px] tabular-nums text-muted">
-              conf {pct(shopType.confidence)}
+              conf {pct(occasion.confidence)}
             </span>
           }
         >
           <code className="mb-2 block font-mono text-xs font-bold text-heading">
-            {shopType.choice}
+            {occasion.choice}
           </code>
           <ul className="space-y-2">
-            {Object.entries(shopType.probabilities)
+            {Object.entries(occasion.probabilities)
               .sort((a, b) => b[1] - a[1])
               .map(([label, p]) => (
                 <DistRow
                   key={label}
                   label={label}
                   value={p}
-                  selected={label === shopType.choice}
+                  selected={label === occasion.choice}
                 />
               ))}
           </ul>
         </IntentSection>
       )}
 
-      {/* Nouls */}
-      <IntentSection title="nouls · yes/no">
-        <ul className="space-y-2">
-          <DistRow
-            label={
-              result.specific_product?.applied === false
-                ? 'specific_product (not scored)'
-                : 'specific_product'
-            }
-            value={result.specific_product?.noul ?? 0}
-            selected={
-              result.specific_product?.applied !== false &&
-              (result.specific_product?.noul ?? 0) >= 0.5
-            }
-          />
-          <DistRow
-            label="blocker"
-            value={result.blocker?.noul ?? 0}
-            selected={(result.blocker?.noul ?? 0) >= 0.5}
-          />
-        </ul>
-      </IntentSection>
+      {/* Persona — code-derived headline + the four independent trait nouls */}
+      {persona && (
+        <IntentSection
+          title="persona · nouls"
+          right={
+            <span className="font-mono text-[10px] tabular-nums text-muted">
+              conf {pct(persona.confidence)}
+            </span>
+          }
+        >
+          <code className="mb-2 block font-mono text-xs font-bold text-heading">
+            {persona.label}
+          </code>
+          <ul className="space-y-2">
+            {Object.entries(persona.traits)
+              .sort((a, b) => b[1] - a[1])
+              .map(([label, p]) => (
+                <DistRow
+                  key={label}
+                  label={label}
+                  value={p}
+                  selected={p >= 0.6 && label === persona.label}
+                />
+              ))}
+          </ul>
+          <p className="mt-2 font-mono text-[9.5px] leading-relaxed text-muted">
+            headline = strongest trait ≥ 60%, else “generalist” — derived in
+            code, not asked of the model
+          </p>
+        </IntentSection>
+      )}
 
-      <hr className="border-border" />
+      {result.session_timeline && (
+        <IntentSection
+          title="agentic context · timeline"
+          right={
+            <span className="font-mono text-[10px] tabular-nums text-muted">
+              event log
+            </span>
+          }
+        >
+          <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded border border-border bg-surface-raised p-2 font-mono text-[9.5px] leading-relaxed text-body">
+            {result.session_timeline}
+          </pre>
+          <p className="mt-2 font-mono text-[9.5px] leading-relaxed text-muted">
+            ordered session events from Signals (grocery_agentic_context) —
+            temporal evidence for stage &amp; budget, read alongside the
+            aggregated attributes
+          </p>
+        </IntentSection>
+      )}
 
       {/* The exact state posted */}
       <section>

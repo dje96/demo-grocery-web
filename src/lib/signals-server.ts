@@ -80,6 +80,40 @@ export async function getWarehouseAttributes(
 }
 
 /**
+ * Read the session's Agentic Context (Signals Event Log `snowplow.signalsEventLog`
+ * — `grocery_agentic_context`) as a plain-language narrative: an ordered, oldest→
+ * newest account of the raw events this session produced (searches, product views,
+ * basket adds/removes, checkout, purchase), including each product's price and
+ * `list_price` so a marked-down pick is visible in sequence.
+ *
+ * This is the temporal counterpart to the aggregated attribute group: the group
+ * says HOW MANY / WHICH, this says WHAT HAPPENED, IN WHAT ORDER. It is handed to
+ * Jev as `state.session_timeline` so the intent read can see intent shift and the
+ * sequence of discounted vs premium picks — evidence aggregation flattens.
+ *
+ * Returns null when Signals is unconfigured/unreachable, the identifier is missing,
+ * or the buffer is empty. The Jev route treats a null timeline as simply "no
+ * temporal evidence" and falls back to the attribute-only read — never an error.
+ */
+export async function getAgenticContext(
+  sessionId: string
+): Promise<string | null> {
+  const client = readClient();
+  if (!client || !sessionId) return null;
+  try {
+    const narrative = await client.getAgenticContext({
+      name: snowplow.signalsEventLog,
+      identifier: sessionId,
+      format: 'narrative',
+    });
+    const text = typeof narrative === 'string' ? narrative.trim() : '';
+    return text === '' ? null : text;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Resolve the current snowplow_id for a browser via the shared `snowplow_id_retrieval`
  * service (attribute group `last_snowplow_id`), keyed by domain_userid. The service
  * serves a `snowplow_id` attribute derived from the pipeline's identity entity, so a
@@ -146,7 +180,7 @@ function allEmpty(attributes: Record<string, unknown>): boolean {
 
 /**
  * Read the demo's session service (siteConfig.snowplow.signalsService —
- * `demo_grocery`, bundling `demo_ecom_plugin_session` v5) for one
+ * `demo_grocery`, bundling `demo_ecom_plugin_session` v7) for one
  * domain_sessionid. This is the Jev state source for /api/intent.
  */
 export async function getSessionAttributesForIntent(

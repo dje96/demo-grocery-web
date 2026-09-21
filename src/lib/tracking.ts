@@ -91,6 +91,14 @@ export function productEntity(product: Product, quantity?: number): EcomProduct 
     name: product.name, // REQUIRED here — feeds the Signals name attributes
     category: aisleName(product.aisle), // aisle NAME, not the slug
     price: product.price,
+    // `list_price` is the ORIGINAL price — only present when the item is
+    // genuinely marked down (catalog `wasPrice`). Signals keys the on-offer
+    // attributes off `list_price is not null`, and it feeds the budget-driven
+    // persona read: a shopper who fills the basket with discounted items is
+    // price-sensitive even when the item names look premium.
+    ...(product.wasPrice && product.wasPrice > product.price
+      ? { list_price: product.wasPrice }
+      : {}),
     brand: product.brand,
     currency: CURRENCY,
     inventory_status: product.inStock ? 'in stock' : 'out of stock',
@@ -254,7 +262,7 @@ export function trackSearchEvent(params: {
 // ─── Login (baseline — identity stitch) ──────────────────────────────────────
 
 const SCHEMAS = {
-  login: 'iglu:com.basket/login/jsonschema/1-0-0',
+  login: 'iglu:com.demo/login/jsonschema/1-0-0',
 } as const;
 
 export type LoginMethod = 'email' | 'google' | 'facebook' | 'apple';

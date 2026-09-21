@@ -115,6 +115,14 @@ export interface SnowplowConfig {
   /** Attribute key the session service is keyed on. */
   signalsAttributeKey: string;
   /**
+   * Signals Event Log (Agentic Context) name — a rolling, ordered buffer of the
+   * session's raw events. Read server-side and handed to Jev as `session_timeline`
+   * narrative, giving the intent read temporal evidence the aggregated attributes
+   * flatten (intent shift, sequence of discounted vs premium picks). Keyed on the
+   * same domain_sessionid. See src/lib/signals-server.ts:getAgenticContext.
+   */
+  signalsEventLog: string;
+  /**
    * Shared, cross-demo service that resolves snowplow_id from domain_userid.
    * Default `snowplow_id_retrieval` is a real published service on the sales
    * pipeline (bundles the `last_snowplow_id` attribute group) — every demo reuses
@@ -211,11 +219,11 @@ export interface SiteConfig {
   };
 }
 
-// ─── Site configuration — Basket (demo-grocery-web) ──────────────────────────
+// ─── Site configuration — Marketside (demo-grocery-web) ──────────────────────
 
 export const siteConfig: SiteConfig = {
   brand: {
-    name: "Basket",
+    name: "Marketside",
     tagline: "Fresh food, sharp prices, delivered in under an hour.",
   },
   snowplow: {
@@ -226,10 +234,12 @@ export const siteConfig: SiteConfig = {
     // Prefer NEXT_PUBLIC_SNOWPLOW_SIGNALS_API_URL at runtime; this is the fallback.
     signalsApiUrl: "",
     // Published Signals pull service for this demo: bundles
-    // `demo_ecom_plugin_session` v5, keyed on domain_sessionid. Read by
+    // `demo_ecom_plugin_session` v7, keyed on domain_sessionid. Read by
     // /api/signals (Inspector Stream tab) AND /api/intent (Jev state source).
     signalsService: "demo_grocery",
     signalsAttributeKey: "domain_sessionid",
+    // Event Log / Agentic Context for this demo, keyed on domain_sessionid.
+    signalsEventLog: "grocery_agentic_context",
     // Shared, cross-demo service — leave as-is.
     idService: "snowplow_id_retrieval",
     idAttributeKey: "domain_userid",
@@ -312,7 +322,7 @@ export const siteConfig: SiteConfig = {
   },
   business: {
     contact: {
-      email: "hello@basket.example",
+      email: "hello@marketside.example",
       phone: "0800 118 8118",
       address: "Unit 4, Cold Chain Park, London E9 5QB",
     },
@@ -323,7 +333,7 @@ export const siteConfig: SiteConfig = {
     },
   },
   seo: {
-    title: "Basket — online grocery, delivered in under an hour",
+    title: "Marketside — online grocery, delivered in under an hour",
     description:
       "Fresh produce, British butchery, bakery baked in store and a full store cupboard. Free delivery over £40.",
     keywords: [
@@ -333,7 +343,7 @@ export const siteConfig: SiteConfig = {
       "fresh produce",
       "delivery slots",
     ],
-    url: "https://basket.example",
+    url: "https://marketside.example",
     ogImage: "/og.png",
   },
 };
@@ -384,7 +394,7 @@ export const plans: Plan[] = [
   },
   {
     id: "basket-plus",
-    name: "Basket Plus",
+    name: "Marketside Plus",
     priceMonthly: 6.99,
     priceAnnual: 69,
     features: [
