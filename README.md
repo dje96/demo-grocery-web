@@ -25,6 +25,37 @@ All six questions run in **one batched `systemOne` call** — answered in parall
 far cheaper than separate round trips. Jev is never asked to count or do
 arithmetic: every total is computed by Signals or in code.
 
+## Snowplow Signals
+
+**Signals** is Snowplow's real-time behavioural intelligence layer. It computes,
+from the live event stream, governed **context** about each user/session and serves
+it back in milliseconds — the same definitions available online (real-time) and in
+the warehouse. Two shapes matter here:
+
+- **Attribute groups** — *aggregated* attributes (counters, unique lists,
+  last-value) keyed on an entity such as `domain_sessionid`. Deployed via a
+  **service** that pins group versions.
+- **Agentic Contexts** (Event Logs) — a rolling, ordered buffer of a session's raw
+  events, served as JSON or a plain-language **narrative** built for AI
+  consumption.
+
+Signals owns the *facts*, Jev owns the *inference*, and code owns the *policy*
+(thresholds, the persona headline, intervention rules) — keeping raw judgments
+reusable.
+
+```mermaid
+flowchart LR
+  T["Snowplow tracking<br/>(ecommerce + com.demo)"] --> P["Snowplow pipeline"]
+  P --> AG["Signals attribute group<br/>demo_ecom_plugin_session<br/><i>aggregated: counts, lists</i>"]
+  P --> EL["Signals Agentic Context<br/>grocery_agentic_context<br/><i>ordered event narrative</i>"]
+  AG --> ST["Jev state<br/>(server: /api/intent)"]
+  EL -->|session_timeline| ST
+  ST --> J["Jev systemOne()<br/><i>one batched call</i>"]
+  J --> R["Typed judgments<br/>stage · occasion · persona"]
+  R --> C["Code policy<br/>thresholds, headline persona"]
+  C --> UI["Signals Inspector<br/>Intent tab"]
+```
+
 ## How context reaches Jev
 
 Two complementary Snowplow Signals shapes feed the model state:
@@ -37,12 +68,6 @@ Two complementary Snowplow Signals shapes feed the model state:
    `price` and `list_price`. The "what happened, in what order" feed, handed to
    Jev as `session_timeline` so `stage` can see intent shift and `is_budget_driven`
    can see a sequence of discounted picks — evidence aggregation flattens.
-
-```
-Snowplow tracking ─▶ Signals (attributes + agentic context) ─▶ Jev state
-                                                                   │
-                              typed judgments (stage/occasion/persona) ◀─┘
-```
 
 On-sale items are tracked via the ecommerce `list_price` field (original price)
 alongside `price`, so a markdown is schema-native and drives the budget read.
