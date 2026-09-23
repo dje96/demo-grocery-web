@@ -124,7 +124,7 @@ export default function InterventionBanner() {
 
   // Push path + presenter trigger.
   useEffect(() => {
-    if (!siteConfig.features.signals) return;
+    if (!siteConfig.features.signals || !siteConfig.features.interventions) return;
     const onEvent = (e: Event) => {
       const fired = (e as CustomEvent<FiredIntervention>).detail;
       if (!fired?.name) return;

@@ -18,6 +18,7 @@ import { siteConfig } from '@/lib/config';
 import { resetSession, clearAllUserData } from '@/lib/snowplow-config';
 import { buildUrlWithUtm } from '@/lib/utils';
 import { isSignalsEnabled, setSignalsEnabled } from '@/lib/consent';
+import { clearStoredBasket } from '@/contexts/shop-context';
 
 export default function DemoFooter() {
   const router = useRouter();
@@ -50,6 +51,7 @@ export default function DemoFooter() {
 
   const handleUtmReload = () => {
     resetSession();
+    clearStoredBasket(); // fresh session starts with an empty basket
     const newUrl = buildUrlWithUtm(window.location.href);
     window.location.href = newUrl;
   };

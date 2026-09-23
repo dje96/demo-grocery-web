@@ -294,6 +294,7 @@ function registerSignalsHandlers(): void {
     addInterventionHandlers({
       intervention(intervention: Intervention) {
         if (typeof window === 'undefined') return;
+        if (!siteConfig.features.interventions) return; // WIP — disabled
         if (!INTERVENTION_NAMES.includes(intervention.name)) return;
         const prior = readFired()[intervention.name];
         if (prior) return; // once per session per intervention
@@ -340,6 +341,7 @@ export function getFiredInterventions(): Record<string, FiredIntervention> {
  */
 export function triggerIntervention(name: string): void {
   if (typeof window === 'undefined') return;
+  if (!siteConfig.features.interventions) return;
   recordFired({ name, source: 'inspector', at: Date.now() });
 }
 

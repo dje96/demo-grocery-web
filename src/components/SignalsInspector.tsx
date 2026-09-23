@@ -513,6 +513,11 @@ export default function SignalsInspector() {
                       <div className="mb-3 flex items-center justify-between gap-3">
                         <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-heading">
                           <Activity className="h-3 w-3" /> interventions
+                          {!siteConfig.features.interventions && (
+                            <span className="rounded-full border border-muted px-1.5 py-px text-[9px] tracking-wider text-muted">
+                              WIP
+                            </span>
+                          )}
                         </h4>
                         <button
                           onClick={() => clearIntervention()}
@@ -551,7 +556,9 @@ export default function SignalsInspector() {
                                 </span>
                                 <button
                                   onClick={() => triggerIntervention(iv.name)}
-                                  className="shrink-0 cursor-pointer rounded-full bg-primary px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-inverse transition-colors hover:bg-highlight"
+                                  disabled={!siteConfig.features.interventions}
+                                  title={siteConfig.features.interventions ? undefined : 'Work in progress — disabled'}
+                                  className="shrink-0 cursor-pointer rounded-full bg-primary px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-inverse transition-colors hover:bg-highlight disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-primary"
                                 >
                                   trigger
                                 </button>
@@ -560,7 +567,9 @@ export default function SignalsInspector() {
                                 {iv.rule}
                               </p>
                               <p className="pl-6 font-mono text-[9.5px] text-muted/70">
-                                {hit
+                                {!siteConfig.features.interventions
+                                  ? 'work in progress · disabled'
+                                  : hit
                                   ? `fired this session · ${hit.source === 'signals' ? 'signals push' : 'manual'} · ${new Date(hit.at).toLocaleTimeString()}`
                                   : 'not fired this session'}
                               </p>

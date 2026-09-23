@@ -51,6 +51,16 @@ import { scheduleIntentRead, setIntentMetaSource } from '@/lib/intent-client';
  * ------------------------------------------------------------------------- */
 
 const CART_KEY = 'basket-cart';
+
+/** Wipe the stored basket without tracking removals — for a fresh demo
+ *  session (UTM Reload), where the old session's events don't matter. */
+export function clearStoredBasket(): void {
+  try {
+    window.localStorage.removeItem(CART_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 const ACTIVITY_KEY = 'basket-activity';
 const ORDER_KEY = 'basket-last-order';
 

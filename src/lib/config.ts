@@ -194,6 +194,12 @@ export interface SiteConfig {
      * Degrades gracefully when TYPESAFE_API_KEY is absent.
      */
     intent: boolean;
+    /**
+     * Surface the phase-2 Signals interventions (banners + push handling).
+     * Off = work in progress: pushes are ignored, no banner renders, and the
+     * Inspector lists them as WIP. Signals-side rules stay published.
+     */
+    interventions: boolean;
   };
   marketing: {
     utmParameters: {
@@ -314,6 +320,7 @@ export const siteConfig: SiteConfig = {
     consent: true,
     warehouse: true,
     intent: true,
+    interventions: false,
   },
   marketing: {
     utmParameters: {
