@@ -25,7 +25,7 @@ import {
   INTERVENTION_CLEARED_EVENT,
   type FiredIntervention,
 } from '@/lib/snowplow-config';
-import { intentPolicy, siteConfig } from '@/lib/config';
+import { siteConfig } from '@/lib/config';
 import { classifyIntent, useIntent, type IntentResult } from '@/lib/intent-client';
 import { useUser } from '@/contexts/user-context';
 
@@ -595,8 +595,7 @@ export default function SignalsInspector() {
 /* ---------------------------------------------------------------------------
  * Intent panel — TypeSafe (Jev)
  *
- * Shows the code-derived stage (and the rule that fired), the occasion choice
- * with its full distribution, the persona trait nouls, and the exact state that was posted — so a presenter
+ * Shows the occasion choice with its full distribution, the persona trait nouls, and the exact state that was posted — so a presenter
  * can show what Jev actually saw.
  * ------------------------------------------------------------------------- */
 
@@ -864,7 +863,6 @@ function IntentPanel({
     );
   }
 
-  const stage = result.stage;
   const occasion = result.occasion;
   const persona = result.persona;
   const metrics = result.metrics;
@@ -877,8 +875,7 @@ function IntentPanel({
       </p>
       {/* What each label is FOR — the one-line legend for the presenter */}
       <p className="-mt-3 text-[10px] leading-relaxed text-body">
-        Stage = when &amp; how hard · Occasion = what to show · Persona = how to
-        frame it
+        Occasion = what to show · Persona = how to frame it
       </p>
       {/* Header — model + re-evaluate */}
       <div className="flex items-center justify-between gap-3">
@@ -896,31 +893,6 @@ function IntentPanel({
       </div>
 
       <hr className="border-border" />
-
-      {/* Stage — ordered rules over Signals facts, not a Jev read */}
-      {stage && (
-        <IntentSection
-          title="stage · rules (signals)"
-          right={
-            <span className="font-mono text-[10px] tabular-nums text-muted">
-              code
-            </span>
-          }
-        >
-          <LabelLine
-            label={stage.enough_signal ? `${stage.label} — ${stage.rule}` : stage.label}
-            enough={stage.enough_signal}
-            gate="≥2 views/searches or ≥1 add"
-          />
-          <ActionLine action={stage.action} />
-          <p className="font-mono text-[9.5px] leading-relaxed text-muted">
-            first match: purchased / checking_out (counters) → hesitating
-            (removed, not re-added) → ready_to_buy (≥
-            {intentPolicy.stage.readyMinItems} items) → on_a_mission (searched,
-            then added) → browsing
-          </p>
-        </IntentSection>
-      )}
 
       {/* Occasion — restock split weekly / top_up in code */}
       {occasion && (
@@ -1033,7 +1005,7 @@ function IntentPanel({
           </pre>
           <p className="mt-2 font-mono text-[9.5px] leading-relaxed text-muted">
             ordered session events from Signals (grocery_agentic_context) —
-            temporal evidence for stage &amp; budget, read alongside the
+            temporal evidence for budget, read alongside the
             aggregated attributes
           </p>
         </IntentSection>
