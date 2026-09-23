@@ -7,7 +7,9 @@
   "dataProductIds": [
     "9e64295e-1e49-40d3-81b3-71a9b1873e84"
   ],
-  "dataStructures": [],
+  "dataStructures": [
+    "iglu:com.demo/intervention_interaction/jsonschema/1-0-0"
+  ],
   "igluCentralSchemas": [],
   "repositories": [],
   "options": {

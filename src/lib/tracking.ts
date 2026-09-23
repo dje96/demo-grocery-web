@@ -39,19 +39,30 @@ import { trackSelfDescribingEvent } from '@snowplow/browser-tracker';
 import type {
   Cart,
   Product as EcomProduct,
+  SPPromotion,
 } from '@snowplow/browser-plugin-snowplow-ecommerce';
+import type { Intervention } from '@snowplow/signals-browser-plugin';
 
 import {
+  createAgentClassifyShopperIntent,
+  createShopperIntent,
   trackAddToBasketSpec,
+  trackClassifyShopperIntentSpec,
   trackCompleteTransactionSpec,
+  trackInterventionInteraction,
   trackPerformSearchSpec,
   trackProgressCheckoutStepSpec,
   trackRemoveFromBasketSpec,
   trackViewProductSpec,
+  type AgentClassifyShopperIntent,
+  type InterventionInteractionType,
   type SearchType,
+  type ShopperIntent,
+  type Trigger,
 } from '@/snowtype/snowplow';
 import { aisleName, type Product } from '@/lib/catalog';
 import { initializeSnowplow } from '@/lib/snowplow-config';
+import { scheduleIntentRead } from '@/lib/intent-client';
 
 export const CURRENCY = 'GBP';
 
@@ -255,6 +266,100 @@ export function trackSearchEvent(params: {
       term,
       search_type: params.searchType,
       total_results: params.totalResults,
+    })
+  );
+  // Phase 2: a new query is new intent evidence — schedule a (debounced) read.
+  scheduleIntentRead('search');
+}
+
+// ─── Intent (phase 2) ────────────────────────────────────────────────────────
+
+export type IntentTrigger = Trigger;
+
+/**
+ * Classify Shopper Intent — one live Jev read the UI acts on. Carries exactly
+ * one `shopper_intent` (labels AFTER code policy + raw probabilities) and one
+ * `agent` entity. Dedupe / trigger policy lives in src/lib/intent-client.ts.
+ */
+export function trackClassifyIntentEvent(params: {
+  trigger: IntentTrigger;
+  latencyMs: number;
+  intent: ShopperIntent;
+  agent: AgentClassifyShopperIntent;
+}): void {
+  dispatch(() =>
+    trackClassifyShopperIntentSpec({
+      trigger: params.trigger,
+      latency_ms: Math.max(0, Math.round(params.latencyMs)),
+      context: [
+        createShopperIntent(params.intent),
+        createAgentClassifyShopperIntent(params.agent),
+      ],
+    })
+  );
+}
+
+// ─── Interventions (phase 2) ─────────────────────────────────────────────────
+
+const INTERVENTION_INSTANCE_SCHEMA =
+  'iglu:com.snowplowanalytics.signals/intervention_instance/jsonschema/1-0-0';
+const PROMOTION_SCHEMA =
+  'iglu:com.snowplowanalytics.snowplow.ecommerce/promotion/jsonschema/1-0-0';
+
+/**
+ * The `intervention_instance` entity, built exactly as the Signals plugin
+ * builds it for its own receive/handle events (the plugin does not expose the
+ * entity on the delivered intervention, so it is rebuilt from the payload).
+ */
+function interventionInstanceEntity(i: Intervention) {
+  return {
+    schema: INTERVENTION_INSTANCE_SCHEMA,
+    data: {
+      intervention_id: i.intervention_id,
+      name: i.name,
+      version: i.version,
+      attributeKey: i.target_attribute_key,
+      attributes: Object.entries(i.attributes ?? {}).map(([attribute, value]) => ({
+        attribute,
+        value,
+      })),
+    } as Record<string, unknown>,
+  };
+}
+
+/**
+ * Intervention banner view / click / dismiss.
+ *  • `intervention` — the Signals push that surfaced it (absent for the
+ *    presenter's manual trigger) → `intervention_instance` entity, 0..1.
+ *  • `promotion` — what the banner offered → ecommerce `promotion`, 0..1.
+ * Hand-assembled context because the draft View/Click/Dismiss Intervention
+ * specs can't be generated yet (intervention_instance isn't in DEV Iglu);
+ * the event itself is Snowtype-generated from the PROD data structure.
+ */
+export function trackInterventionInteractionEvent(params: {
+  name: string;
+  type: InterventionInteractionType;
+  intervention?: Intervention | null;
+  promotion?: SPPromotion;
+}): void {
+  const context = [
+    ...(params.intervention?.intervention_id
+      ? [interventionInstanceEntity(params.intervention)]
+      : []),
+    ...(params.promotion
+      ? [
+          {
+            schema: PROMOTION_SCHEMA,
+            data: params.promotion as unknown as Record<string, unknown>,
+          },
+        ]
+      : []),
+  ];
+  dispatch(() =>
+    trackInterventionInteraction({
+      name: params.name,
+      type: params.type,
+      ...(context.length ? { context } : {}),
     })
   );
 }

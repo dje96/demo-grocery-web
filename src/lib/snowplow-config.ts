@@ -3,7 +3,7 @@
  *
  * Initializes the Snowplow browser tracker with the standard plugin set and
  * exposes every tracking function the app uses. NOTHING here is demo-specific:
- * appId, collector/Signals endpoints, and the intervention name are all read
+ * appId, collector/Signals endpoints, and the intervention names are all read
  * from `siteConfig.snowplow`. Point that config block at the resources you
  * published in Console and this file works unchanged.
  *
@@ -72,23 +72,33 @@ const TRACKER_NAMESPACE = snowplow.namespace;
 const SIGNALS_ENDPOINT =
   process.env.NEXT_PUBLIC_SNOWPLOW_SIGNALS_API_URL ?? snowplow.signalsApiUrl;
 
-/** Name of the published intervention this demo surfaces. */
-export const INTERVENTION_NAME = snowplow.interventionName;
+/** Names of the published interventions this demo surfaces. */
+export const INTERVENTION_NAMES: readonly string[] =
+  snowplow.interventions.map((i) => i.name);
 
 /**
- * Window CustomEvent fired when the intervention should surface. Three producers
- * converge on it — the Signals plugin handler (real push delivery), the
- * pull-poll fallback, and the presenter-only Signals Inspector "trigger" button
- * — so the surface has a single integration seam. A discrete trigger is an
- * explicit one-off signal and therefore RESETS any prior session dismissal.
+ * Window CustomEvent fired when an intervention should surface. Two producers
+ * converge on it — the Signals plugin handler (real push delivery) and the
+ * presenter-only Signals Inspector "trigger" buttons — so the surface has a
+ * single integration seam. `detail` is a `FiredIntervention`.
  */
 export const INTERVENTION_EVENT = 'sp:intervention';
 
 /** Window CustomEvent fired to clear/hide the intervention surface. */
 export const INTERVENTION_CLEARED_EVENT = 'sp:intervention-cleared';
 
-/** sessionStorage key persisting a triggered intervention across navigations. */
-const INTERVENTION_STORAGE_KEY = 'demo-intervention';
+/** sessionStorage key recording which interventions fired this session. */
+const INTERVENTION_STORAGE_KEY = 'demo-interventions';
+
+/** An intervention that fired this session, by whatever route. */
+export interface FiredIntervention {
+  name: string;
+  /** `signals` = real SSE push; `inspector` = presenter manual trigger. */
+  source: 'signals' | 'inspector';
+  /** The pushed payload (attributes, intervention_id) — signals only. */
+  intervention?: Intervention;
+  at: number;
+}
 
 /**
  * The Signals browser plugin logs benign, self-recovering SSE reconnect noise
@@ -238,30 +248,61 @@ export function initializeSnowplow(): void {
   isInitialized = true;
 }
 
-// ─── Signals interventions (dual-path: push handler + pull-poll fallback) ─────
+// ─── Signals interventions (push handler + presenter trigger) ────────────────
 
 let signalsConnected = false;
 
+type FiredStore = { sid: string; fired: Record<string, FiredIntervention> };
+
+/** This session's fired interventions (a record from an older domain session
+ *  in the same tab is ignored). */
+function readFired(): Record<string, FiredIntervention> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.sessionStorage.getItem(INTERVENTION_STORAGE_KEY);
+    const store = raw ? (JSON.parse(raw) as FiredStore) : null;
+    const sid = getDomainSessionId(TRACKER_NAMESPACE) ?? '';
+    return store && (!sid || store.sid === sid) ? store.fired ?? {} : {};
+  } catch {
+    return {};
+  }
+}
+
+function recordFired(entry: FiredIntervention): void {
+  const fired = { ...readFired(), [entry.name]: entry };
+  try {
+    window.sessionStorage.setItem(
+      INTERVENTION_STORAGE_KEY,
+      JSON.stringify({ sid: getDomainSessionId(TRACKER_NAMESPACE) ?? '', fired })
+    );
+  } catch {
+    /* ignore */
+  }
+  window.dispatchEvent(new CustomEvent(INTERVENTION_EVENT, { detail: entry }));
+}
+
 /**
  * Register the intervention handler. The plugin calls EVERY registered handler
- * for EVERY received intervention, so we filter by `intervention.name`. On a
- * match we persist to sessionStorage (so it survives navigation) and dispatch
- * the shared CustomEvent the surface listens for.
+ * for EVERY received intervention, so we filter on the configured names.
+ * Signals has no once-per-session setting, so the app dedupes: an
+ * intervention name that already fired this session (or a repeat
+ * `intervention_id`) is ignored.
  */
 function registerSignalsHandlers(): void {
   if (!(siteConfig.features.signals && isSignalsEnabled())) return;
   try {
     addInterventionHandlers({
       intervention(intervention: Intervention) {
-        if (intervention.name !== INTERVENTION_NAME) return;
         if (typeof window === 'undefined') return;
-        window.sessionStorage.setItem(
-          INTERVENTION_STORAGE_KEY,
-          JSON.stringify({ triggered: true, intervention })
-        );
-        window.dispatchEvent(
-          new CustomEvent(INTERVENTION_EVENT, { detail: { intervention } })
-        );
+        if (!INTERVENTION_NAMES.includes(intervention.name)) return;
+        const prior = readFired()[intervention.name];
+        if (prior) return; // once per session per intervention
+        recordFired({
+          name: intervention.name,
+          source: 'signals',
+          intervention,
+          at: Date.now(),
+        });
       },
     });
   } catch {
@@ -271,8 +312,7 @@ function registerSignalsHandlers(): void {
 
 /**
  * Subscribe to the intervention SSE, scoped to `domain_sessionid` only via the
- * `sessionOnlyFetcher`. The pull-poll fallback (see lib/nudge.ts) still covers
- * cases where the push SSE lags or fails.
+ * `sessionOnlyFetcher`.
  */
 export function connectToSignals(): void {
   if (signalsConnected) return;
@@ -287,36 +327,23 @@ export function connectToSignals(): void {
   }
 }
 
-/** True when an intervention has been recorded this session (push path). */
-export function hasInterventionTriggered(): boolean {
-  if (typeof window === 'undefined' || !isSignalsEnabled()) return false;
-  const stored = window.sessionStorage.getItem(INTERVENTION_STORAGE_KEY);
-  if (!stored) return false;
-  try {
-    return JSON.parse(stored)?.triggered === true;
-  } catch {
-    return false;
-  }
+/** Interventions that fired this session, keyed by name. */
+export function getFiredInterventions(): Record<string, FiredIntervention> {
+  if (!isSignalsEnabled()) return {};
+  return readFired();
 }
 
 /**
- * Presenter override: record + broadcast the intervention on demand (Inspector
- * button), using the same sessionStorage + CustomEvent contract as the real
- * push handler.
+ * Presenter override: fire an intervention on demand (Inspector button),
+ * through the same sessionStorage + CustomEvent contract as the push handler.
+ * An explicit trigger overrides once-per-session.
  */
-export function triggerIntervention(): void {
+export function triggerIntervention(name: string): void {
   if (typeof window === 'undefined') return;
-  const intervention = { name: INTERVENTION_NAME, source: 'inspector' };
-  window.sessionStorage.setItem(
-    INTERVENTION_STORAGE_KEY,
-    JSON.stringify({ triggered: true, intervention })
-  );
-  window.dispatchEvent(
-    new CustomEvent(INTERVENTION_EVENT, { detail: { intervention } })
-  );
+  recordFired({ name, source: 'inspector', at: Date.now() });
 }
 
-/** Clear the recorded intervention and notify listeners (presenter Clear). */
+/** Clear every recorded intervention and notify listeners (presenter Clear). */
 export function clearIntervention(): void {
   if (typeof window === 'undefined') return;
   window.sessionStorage.removeItem(INTERVENTION_STORAGE_KEY);
