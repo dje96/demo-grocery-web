@@ -42,8 +42,8 @@ import { useShop } from '@/contexts/shop-context';
  *     served by /api/intent, whose state is built server-side from the LIVE
  *     Signals `demo_grocery` service. Fetched on tab open and on an explicit
  *     "re-evaluate" — deliberately NOT polled, because each call costs tokens.
- *     A "Signals | Local" toggle switches the state source to the browser's own
- *     session activity, so the tab still demos where Signals has no data.
+ *     Show-only: labels, suggested actions and gates are displayed, nothing
+ *     here changes the live site.
  *   • Interventions — each eligibility clause (siteConfig.snowplow.interventionClauses)
  *     with a live met/unmet tick + a manual "trigger" button (persists across tabs)
  *
@@ -61,11 +61,10 @@ const WAREHOUSE_UNLOCK_ID =
 type SignalsAttributes = Record<string, unknown>;
 type WarehouseTab = 'stream' | 'warehouse' | 'intent';
 
-/** Shape returned by /api/intent (see that route for how it is derived). */
+/** Shape returned by /api/intent (see that route + src/lib/intent.ts). */
 interface IntentResult {
   configured: boolean;
-  /** Which state source produced this result. */
-  source?: 'signals' | 'local';
+  source?: 'signals';
   /**
    * Why the panel looks the way it does. `live` is a real classification;
    * `empty` means Signals answered but this session has no attributes yet
@@ -80,9 +79,38 @@ interface IntentResult {
   attributes?: Record<string, unknown>;
   error?: string;
   model?: string;
-  stage?: { choice: string; confidence: number; probabilities: Record<string, number> };
-  occasion?: { choice: string; confidence: number; probabilities: Record<string, number> };
-  persona?: { label: string; confidence: number; traits: Record<string, number> };
+  stage?: {
+    label: string;
+    jev_choice: string;
+    /** Set when Signals counters (checkout / purchase) overrode Jev. */
+    override: 'checking_out' | 'purchased' | null;
+    confidence: number;
+    probabilities: Record<string, number>;
+    enough_signal: boolean;
+    action: string | null;
+  };
+  occasion?: {
+    label: string;
+    jev_choice: string;
+    restock_split: 'weekly' | 'top_up' | null;
+    confidence: number;
+    probabilities: Record<string, number>;
+    enough_signal: boolean;
+    action: string | null;
+  };
+  persona?: {
+    label: string;
+    headline: string;
+    confidence: number;
+    traits: Record<string, number>;
+    active: string[];
+    plant_based: { probability: number; active: boolean };
+    enough_signal: boolean;
+    action: string | null;
+    filter: string | null;
+  };
+  /** Counts / totals for display — never part of the Jev state. */
+  metrics?: Record<string, number>;
   state?: unknown;
   /** Ordered session narrative from the Signals Event Log (Agentic Context)
    *  that Jev read as `session_timeline`. Absent when the buffer was empty. */
@@ -164,13 +192,10 @@ export default function SignalsInspector() {
   const [intent, setIntent] = useState<IntentResult | null>(null);
   const [intentLoading, setIntentLoading] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
-  /** Where /api/intent should build the Jev state from. Signals is the real
-   *  path; Local replays the browser's own session activity as a fallback. */
-  const [intentSource, setIntentSource] = useState<'signals' | 'local'>('signals');
   const intentFetchedRef = useRef(false);
 
   const { user } = useUser();
-  const { intentState, activityMeta } = useShop();
+  const { activityMeta } = useShop();
   const currentEmail = user?.email ?? null;
 
   const fetchAttributes = useCallback(async () => {
@@ -231,12 +256,10 @@ export default function SignalsInspector() {
         body: JSON.stringify({
           // The server reads everything semantic from the Signals service for
           // this session id. Only the two counters Signals does not carry are
-          // sent from here, and only the fallback path sends any state.
+          // sent from here (display-only panel metrics).
           sessionId: getSessionId() ?? null,
           pageCount: meta.pageCount,
           sessionStartedAt: meta.startedAt,
-          source: intentSource,
-          localState: intentSource === 'local' ? intentState() : undefined,
         }),
       });
       setIntent((await res.json()) as IntentResult);
@@ -244,14 +267,14 @@ export default function SignalsInspector() {
       console.error('Intent evaluation failed', e);
       setIntent({
         configured: true,
-        source: intentSource,
+        source: 'signals',
         source_status: 'error',
         error: 'Could not reach /api/intent.',
       });
     } finally {
       setIntentLoading(false);
     }
-  }, [activityMeta, intentSource, intentState]);
+  }, [activityMeta]);
 
   // Poll only while open.
   useEffect(() => {
@@ -483,8 +506,6 @@ export default function SignalsInspector() {
                     onRefresh={fetchIntent}
                     stateOpen={stateOpen}
                     onToggleState={() => setStateOpen((o) => !o)}
-                    source={intentSource}
-                    onSourceChange={setIntentSource}
                   />
                 ) : effectiveTab === 'warehouse' ? (
                   /* Warehouse (batch) attributes */
@@ -707,44 +728,55 @@ function IntentSection({
   );
 }
 
-/**
- * "Signals | Local" state-source toggle. Signals is the real Phase 4 path;
- * Local replays the browser's own session activity so the tab still demos on a
- * pipeline where Signals has no data for this session.
- */
-function SourceToggle({
-  source,
-  onChange,
+/** The claimed label, or "Not enough signal" when its evidence gate fails.
+ *  Jev still answered — the distribution below stays visible — but the panel
+ *  does not claim a label the evidence can't support. */
+function LabelLine({
+  label,
+  enough,
+  gate,
 }: {
-  source: 'signals' | 'local';
-  onChange: (next: 'signals' | 'local') => void;
+  label: string;
+  enough: boolean;
+  gate: string;
 }) {
+  if (!enough) {
+    return (
+      <p className="mb-2">
+        <span className="font-mono text-xs font-bold text-muted">
+          Not enough signal
+        </span>
+        <span className="ml-2 font-mono text-[9.5px] text-muted/70">
+          needs {gate}
+        </span>
+      </p>
+    );
+  }
   return (
-    <div className="mb-3 flex items-center gap-2">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted">
-        state source
+    <code className="mb-2 block font-mono text-xs font-bold text-heading">
+      {label}
+    </code>
+  );
+}
+
+/** Suggested action for a label — show-only, nothing fires on the site. */
+function ActionLine({
+  action,
+  filter,
+}: {
+  action: string | null;
+  filter?: boolean;
+}) {
+  if (!action) return null;
+  return (
+    <p className="mb-2 flex items-start gap-1.5 text-[10.5px] leading-snug text-body">
+      <ChevronRight
+        className={`mt-0.5 h-3 w-3 shrink-0 ${filter ? 'text-error' : 'text-primary'}`}
+      />
+      <span>
+        {filter ? action : `Suggested: ${action}`}
       </span>
-      <div className="flex gap-1 rounded-full bg-surface-raised p-0.5">
-        {(['signals', 'local'] as const).map((id) => (
-          <button
-            key={id}
-            onClick={() => onChange(id)}
-            title={
-              id === 'signals'
-                ? `Live attributes from the ${siteConfig.snowplow.signalsService} Signals service`
-                : 'This browser session’s own activity (fallback)'
-            }
-            className={`cursor-pointer rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors ${
-              source === id
-                ? 'bg-primary text-inverse'
-                : 'text-muted hover:text-heading'
-            }`}
-          >
-            {id}
-          </button>
-        ))}
-      </div>
-    </div>
+    </p>
   );
 }
 
@@ -788,18 +820,13 @@ function IntentPanel({
   onRefresh,
   stateOpen,
   onToggleState,
-  source,
-  onSourceChange,
 }: {
   result: IntentResult | null;
   loading: boolean;
   onRefresh: () => void;
   stateOpen: boolean;
   onToggleState: () => void;
-  source: 'signals' | 'local';
-  onSourceChange: (next: 'signals' | 'local') => void;
 }) {
-  const toggle = <SourceToggle source={source} onChange={onSourceChange} />;
 
   if (loading && !result) {
     return (
@@ -829,7 +856,6 @@ function IntentPanel({
   if (result?.source_status === 'empty') {
     return (
       <div>
-        {toggle}
         <IntentNotice
           icon={<Wifi className="mb-3 h-10 w-10 opacity-50" />}
           title="no session data yet"
@@ -854,7 +880,6 @@ function IntentPanel({
   ) {
     return (
       <div>
-        {toggle}
         <IntentNotice
           icon={<Wifi className="mb-3 h-10 w-10 opacity-50" />}
           title={
@@ -874,7 +899,6 @@ function IntentPanel({
   if (result?.error) {
     return (
       <div className="space-y-3 py-4">
-        {toggle}
         <p className="text-center text-xs text-error">{result.error}</p>
         <button
           onClick={onRefresh}
@@ -889,7 +913,6 @@ function IntentPanel({
   if (!result) {
     return (
       <div>
-        {toggle}
         <div className="flex flex-col items-center py-8 text-muted">
           <Gauge className="mb-3 h-10 w-10 opacity-50" />
           <p className="font-bold text-body">no evaluation yet</p>
@@ -907,15 +930,18 @@ function IntentPanel({
   const stage = result.stage;
   const occasion = result.occasion;
   const persona = result.persona;
+  const metrics = result.metrics;
 
   return (
     <div className="space-y-5">
-      {toggle}
-      {/* Provenance — which source actually produced this classification */}
-      <p className="-mt-2 font-mono text-[9.5px] text-muted/70">
-        {result.source === 'local'
-          ? 'built from this browser session (fallback)'
-          : `built from Signals · ${result.service ?? siteConfig.snowplow.signalsService} · ${siteConfig.snowplow.signalsAttributeKey}`}
+      {/* Provenance — the classification is always built from Signals */}
+      <p className="font-mono text-[9.5px] text-muted/70">
+        {`built from Signals · ${result.service ?? siteConfig.snowplow.signalsService} · ${siteConfig.snowplow.signalsAttributeKey}`}
+      </p>
+      {/* What each label is FOR — the one-line legend for the presenter */}
+      <p className="-mt-3 text-[10px] leading-relaxed text-body">
+        Stage = when &amp; how hard · Occasion = what to show · Persona = how to
+        frame it
       </p>
       {/* Header — model + re-evaluate */}
       <div className="flex items-center justify-between gap-3">
@@ -934,7 +960,7 @@ function IntentPanel({
 
       <hr className="border-border" />
 
-      {/* Stage */}
+      {/* Stage — Jev's choice, unless Signals counters say checkout/purchase */}
       {stage && (
         <IntentSection
           title="stage · choice"
@@ -944,9 +970,17 @@ function IntentPanel({
             </span>
           }
         >
-          <code className="mb-2 block font-mono text-xs font-bold text-heading">
-            {stage.choice}
-          </code>
+          <LabelLine
+            label={stage.label}
+            enough={stage.enough_signal}
+            gate="≥2 views/searches or ≥1 add"
+          />
+          {stage.override && (
+            <p className="-mt-1 mb-2 font-mono text-[9.5px] text-muted">
+              set in code from Signals counters · jev read {stage.jev_choice}
+            </p>
+          )}
+          <ActionLine action={stage.action} />
           <ul className="space-y-2">
             {Object.entries(stage.probabilities)
               .sort((a, b) => b[1] - a[1])
@@ -955,14 +989,14 @@ function IntentPanel({
                   key={label}
                   label={label}
                   value={p}
-                  selected={label === stage.choice}
+                  selected={stage.enough_signal && label === stage.jev_choice}
                 />
               ))}
           </ul>
         </IntentSection>
       )}
 
-      {/* Occasion */}
+      {/* Occasion — restock split weekly / top_up in code */}
       {occasion && (
         <IntentSection
           title="occasion · choice"
@@ -972,9 +1006,12 @@ function IntentPanel({
             </span>
           }
         >
-          <code className="mb-2 block font-mono text-xs font-bold text-heading">
-            {occasion.choice}
-          </code>
+          <LabelLine
+            label={occasion.label}
+            enough={occasion.enough_signal}
+            gate="≥2 adds or any search"
+          />
+          <ActionLine action={occasion.action} />
           <ul className="space-y-2">
             {Object.entries(occasion.probabilities)
               .sort((a, b) => b[1] - a[1])
@@ -983,14 +1020,20 @@ function IntentPanel({
                   key={label}
                   label={label}
                   value={p}
-                  selected={label === occasion.choice}
+                  selected={occasion.enough_signal && label === occasion.jev_choice}
                 />
               ))}
           </ul>
+          {occasion.restock_split && (
+            <p className="mt-2 font-mono text-[9.5px] leading-relaxed text-muted">
+              weekly = ≥3 aisles incl. Household, or ≥8 adds — else top_up ·
+              split in code
+            </p>
+          )}
         </IntentSection>
       )}
 
-      {/* Persona — code-derived headline + the four independent trait nouls */}
+      {/* Persona — code-derived headline + five independent trait nouls */}
       {persona && (
         <IntentSection
           title="persona · nouls"
@@ -1000,9 +1043,13 @@ function IntentPanel({
             </span>
           }
         >
-          <code className="mb-2 block font-mono text-xs font-bold text-heading">
-            {persona.label}
-          </code>
+          <LabelLine
+            label={persona.headline}
+            enough={persona.enough_signal}
+            gate="≥2 adds"
+          />
+          <ActionLine action={persona.action} />
+          {persona.filter && <ActionLine action={persona.filter} filter />}
           <ul className="space-y-2">
             {Object.entries(persona.traits)
               .sort((a, b) => b[1] - a[1])
@@ -1011,14 +1058,38 @@ function IntentPanel({
                   key={label}
                   label={label}
                   value={p}
-                  selected={p >= 0.6 && label === persona.label}
+                  selected={
+                    persona.enough_signal &&
+                    (label === 'plant_based'
+                      ? persona.plant_based.active
+                      : persona.active.includes(label))
+                  }
                 />
               ))}
           </ul>
           <p className="mt-2 font-mono text-[9.5px] leading-relaxed text-muted">
-            headline = strongest trait ≥ 60%, else “generalist” — derived in
-            code, not asked of the model
+            framing traits active ≥ 60%, strongest headlines, else “generalist”
+            · plant_based is a filter at ≥ 80% · derived in code, not asked of
+            the model
           </p>
+        </IntentSection>
+      )}
+
+      {/* Signals facts — the numbers kept OUT of the Jev state */}
+      {metrics && (
+        <IntentSection title="signals facts · not sent to jev">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+            {Object.entries(metrics).map(([key, value]) => (
+              <div key={key} className="flex items-baseline justify-between gap-2">
+                <code className="truncate font-mono text-[9.5px] text-muted">
+                  {key}
+                </code>
+                <span className="font-mono text-[10px] tabular-nums text-heading">
+                  {value}
+                </span>
+              </div>
+            ))}
+          </div>
         </IntentSection>
       )}
 

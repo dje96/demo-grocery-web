@@ -234,7 +234,8 @@ export const siteConfig: SiteConfig = {
     // Prefer NEXT_PUBLIC_SNOWPLOW_SIGNALS_API_URL at runtime; this is the fallback.
     signalsApiUrl: "",
     // Published Signals pull service for this demo: bundles
-    // `demo_ecom_plugin_session` v7, keyed on domain_sessionid. Read by
+    // `demo_ecom_plugin_session` (v7; v8 adds cart_brands / cart_categories /
+    // cart_removed_names), keyed on domain_sessionid. Read by
     // /api/signals (Inspector Stream tab) AND /api/intent (Jev state source).
     signalsService: "demo_grocery",
     signalsAttributeKey: "domain_sessionid",
@@ -347,6 +348,42 @@ export const siteConfig: SiteConfig = {
     ogImage: "/og.png",
   },
 };
+
+// ─── Intent policy (Signals Inspector "Intent" tab) ──────────────────────────
+//
+// Every threshold the /api/intent route applies ON TOP of Jev's judgments.
+// Signals serves facts, Jev reads meaning, and THIS is the policy — so a
+// presenter can retune what the panel claims without touching a question
+// (and without re-running inference: the raw probabilities don't change).
+// Read by src/lib/intent.ts; the eval script uses the same values.
+
+export const intentPolicy = {
+  /** Framing traits (budget / health / convenience / foodie) count as active
+   *  at or above this Noul probability. The highest active one headlines. */
+  personaFramingThreshold: 0.6,
+  /** plant_based is a FILTER (exclude meat, fish & dairy from suggestions),
+   *  never a headline. Higher bar: a wrong filter hides whole aisles. */
+  plantBasedThreshold: 0.8,
+  /** Restock split, done in code: "weekly" when the added items span at least
+   *  this many aisles (Signals `cart_categories`) AND include Household … */
+  weeklyMinAisles: 3,
+  weeklyRequiredAisle: "Household",
+  /** … OR at least this many add-to-basket actions. Otherwise "top_up". */
+  weeklyMinAdds: 8,
+  /** Evidence gates — Jev still runs on ANY evidence; a gate only controls
+   *  whether the panel claims a label or shows "Not enough signal". */
+  gates: {
+    /** stage: ≥ N product views + searches combined, OR ≥ 1 add. */
+    stageMinViewsOrSearches: 2,
+    stageMinAdds: 1,
+    /** occasion: ≥ N adds, OR any search at all (a search can name the
+     *  occasion — "bbq", "birthday cake"). */
+    occasionMinAdds: 2,
+    /** persona: ≥ N adds. Views don't count — persona reads ADDED items
+     *  only (a view shows curiosity, not preference). */
+    personaMinAdds: 2,
+  },
+} as const;
 
 // ─── Content catalog ─────────────────────────────────────────────────────────
 //

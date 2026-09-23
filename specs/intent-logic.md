@@ -1,115 +1,174 @@
-# How the intent score works
+# How intent classification works
 
 A plain-English guide to what the Intent tab in the Signals Inspector is doing.
 
 ## The short version
 
 Snowplow watches what a shopper does and keeps a running summary of their
-session. That summary — what they searched for, what they looked at, what is in
-their basket — is handed to a model called Jev, which reads it the way a shop
-assistant would and says how close this person looks to buying.
+session — what they added, removed, searched for and looked at. That summary
+is handed to a model called Jev, which reads it the way a shop assistant would
+and answers three questions: **when** to step in, **what** to show, and **how**
+to talk to them.
 
-The result is a single number between 0% and 100%, plus the reasoning behind it.
+- **Stage** = when — how ready this shopper is right now, and how hard to
+  intervene.
+- **Occasion** = what — what this shop is for, which decides what to show.
+- **Persona** = how — how to frame it (or, for one trait, what to filter out).
 
 ## Why the work is split in two
 
-Two very different jobs are involved, and neither system is good at both.
-
-**Snowplow does the counting.** It keeps the tally: how many products were
-viewed, what the basket is worth, which aisles were visited. Machines are
+**Snowplow does the counting.** It keeps the tally: what's in the basket, what
+was removed, what was searched, which aisles were browsed. Machines are
 reliable at this; a language model is not.
 
-**Jev does the reading.** It looks at the actual words — "bronze die spaghetti",
-"parmesan", "Scottish salmon fillets" — and judges what they mean together.
-Counting cannot tell you that salmon, lemons and butter are one dinner. Reading
-them can.
+**Jev does the reading.** It looks at the actual words and products —
+"aged ribeye", "Sauvignon Blanc", "dark chocolate" — and judges what they mean
+together. Counting cannot tell you that's a dinner for two; reading it can.
 
-So the counts are calculated in ordinary code, and Jev is explicitly told to
-ignore them when making its main judgment. It is asked to go on the words alone.
-This matters: a shopper with thirty scattered items is less ready to buy than one
-with four items that add up to a meal, and only the words reveal that.
+So counts, splits and thresholds are decided in ordinary code, and Jev is only
+ever asked to read meaning from names and words.
 
-## The four questions
+## Stage, occasion: Choices. Persona: Nouls
 
-Jev is asked all four at once, over the same session summary.
+Stage and occasion are each a **Choice** — Jev picks exactly one option,
+because a shopper is in one mindset and on one kind of shop at a time.
 
-**1. How decided is this shopper?** A single line with three points on it:
+Persona is **Nouls** — several traits that can all be true at once, each
+scored independently. A shopper can be budget-driven and a foodie in the same
+basket; forcing that into a single label would lose the truth.
 
-- *Browsing* — looking around, no settled goal. Scattered products, broad
-  searches like "cheese", an empty or near-empty basket.
-- *Comparing* — weighing alternatives of the same thing. Several near-identical
-  products viewed; searches name a kind of product, not a specific one.
-- *Ready to buy* — decided. The basket holds what they came for, and any
-  searches name specific products rather than categories. Someone restocking
-  milk, bread and bin bags counts here too: they already know what they want.
+## Stage — when, and how hard to step in
 
-Everything on this line answers one question — how made-up is their mind. What
-*kind* of shop it is gets asked separately, below.
-
-**2. Are they searching for something specific?** Yes for "yeo valley butter";
-no for "cheese". Someone naming a brand has already made their choice.
-
-**3. Are they stuck on something?** Searches about delivery slots, charges,
-substitutions or returns mean they are asking about the service, not choosing
-food. That is a different problem and often a reason a sale does not happen.
-
-**4. What kind of shop is this?** A weekly shop, a top-up, a single meal, or a
-special occasion. Useful context rather than a purchase signal on its own.
-
-## Turning that into one number
-
-Two of the four answers combine into the headline score:
-
-| Ingredient | Weight | Why |
+| Label | Meaning | Suggested action |
 |---|---|---|
-| How likely they are "ready to buy" | 70% | The most direct signal |
-| Whether searches name specific products | 30% | Naming a brand means the choice is made |
+| browsing | No settled goal, looking for ideas | Show inspiration / recipes |
+| on_a_mission | Knows what they want, still finding it | Speed them up: direct links, "did you mean" |
+| comparing | Weighing near-substitutes of one thing, not yet chosen | Comparison help, reviews, price-per-unit |
+| ready_to_buy | Has what they came for, finishing up | Get out of the way, nudge to checkout |
+| hesitating | Had a basket, now pulling back or stalling | Reassurance or an offer |
 
-The other two answers — *stuck on service questions* and *kind of shop* — are
-shown but not scored. They explain the situation rather than measure intent, and
-mixing them into one number would blur what it means.
+Jev weighs the most recent activity most heavily — earlier browsing just shows
+how the shopper got here, not where they are now.
 
-**When the shopper never searched**, the second ingredient is left out
-altogether and the first carries the whole score. Plenty of people navigate by
-aisle and never type anything; they have simply told us nothing on that point,
-and "told us nothing" is not the same as "no". Scoring it as a no used to cap
-those shoppers at 70% no matter how obviously decided their basket was.
+Two further states are never Jev's call: **checking_out** and **purchased**
+are set straight from Signals counters (whether checkout has started, whether
+the order completed). Jev still runs underneath, but its stage is overridden
+for display — code, not the model, owns that boundary.
 
-A note on why the search question does not also read the names of products the
-shopper looked at: every name in the catalogue is already specific — "Organic
-Hass Avocados", "British Maris Piper Potatoes". Feeding those in would make the
-answer yes for anyone who looked at anything, and the signal would stop telling
-us apart one shopper from another. What the shopper *typed* is evidence because
-they chose the words. What the shop calls its products is not.
+## Occasion — what this shop is for
 
-The weights live in ordinary code, so they can be changed without asking the
-model anything again.
-
-## What it looks like in practice
-
-Two real sessions from this demo. The percentages below predate the current
-weighting, so treat the columns as a comparison rather than as exact figures:
-
-| | Salmon, lemons and butter viewed; searched "sea bass fillets", "lemons" | Empty basket; searched "delivery slots", "snacks" |
+| Label | Meaning | Action |
 |---|---|---|
-| **Score** | **high** | **very low** |
-| Stage | Ready to buy | Browsing |
-| Kind of shop | Single meal | Weekly shop |
-| Specific search? | Likely yes | No |
-| Stuck on service? | No | **Yes** |
+| restock | Replenishing everyday household items | Weekly shop → favourites / delivery slot. Top-up → fast checkout + free-delivery nudge |
+| meal | Building one dish or dinner | Complete the recipe |
+| event | Feeding a group or celebrating | Bundles + quantity prompts |
+| unclear | Enough evidence, but it doesn't add up to one purpose | Generic |
 
-The first shopper never said they were making dinner. The model read three
-ingredients and worked it out — which is the whole point of the exercise.
+Jev judges the whole set of items together, not any one product on its own.
+Searches naming an event or dish ("bbq", "birthday cake") are strong evidence.
+
+**The weekly vs top-up split happens in code, not in Jev's judgment.** Once
+Jev says "restock", code checks the basket: added items spanning three or
+more aisles (including household), or eight or more items, counts as a
+weekly shop; anything smaller is a top-up. That's a hard rule, and hard rules
+belong in code, where they can be tuned without asking the model anything.
+
+## Persona — how to frame it
+
+| Trait | Meaning | Action |
+|---|---|---|
+| budget_driven | Price is steering choices — own-brand over premium, picks on offer | Lead with offers, own-brand swaps, price-per-unit |
+| health_conscious | Leans fresh, wholegrain, low-sugar, high-protein, organic | Healthier swaps, nutrition badges |
+| convenience_seeking | Ready-to-eat, minimal prep | Ready-made alternatives, one-click bundles |
+| foodie_explorer | Quality and indulgence — specialty ranges, premium cuts, wine | Specialty/premium variants, pairing, recipe inspiration |
+| plant_based | Chose plant alternatives, and nothing added contains meat, fish or dairy | **Filter**: exclude meat, fish and dairy from suggestions |
+
+Every trait Jev marks `false` means "no evidence of this" — not "the
+opposite is true". A shopper who hasn't shown price sensitivity isn't
+necessarily a big spender; we just haven't seen it yet.
+
+Code then applies the headline policy: the first four traits (the "framing"
+traits) count as active above a threshold, and the strongest one drives how
+the page is framed. It's entirely possible for two to be active together — a
+shopper can be both budget-driven and a foodie.
+
+**plant_based is stricter and works differently.** It never competes to be
+the headline framing, and it needs a higher threshold to switch on, because
+its job is riskier than the others: it filters meat, fish and dairy out of
+what the shopper sees next. Getting a framing trait wrong costs a slightly
+worse suggestion; getting this one wrong means recommending food a shopper
+can't eat. So it demands stronger evidence — genuine plant-based choices,
+*and* nothing animal-derived in what they added — before it's trusted to act.
+
+## Who does what
+
+- **Signals** serves facts: what was added and removed this session, brands,
+  categories, on-offer items, search terms, products viewed, aisles visited,
+  and — when available — a timeline of the session's events.
+- **Code** applies policy: it decides checkout/purchased overrides, splits
+  restock into weekly vs top-up, sets the evidence thresholds, decides which
+  persona traits are "active", and builds the headline shown on screen.
+- **Jev** reads meaning: given the facts above, it judges mindset, purpose,
+  and framing from the words and products themselves.
+
+## Why no numbers go to Jev
+
+Jev is handed names and lists — product names, search terms, brands,
+categories — never counts, ratios, durations, or totals. Numbers are exactly
+what ordinary code is reliable at; asking a language model to do arithmetic
+on a shopper's behalf just adds a place for it to get things wrong. Those
+numbers still exist and are shown in the Inspector panel — they're just kept
+out of what Jev is asked to reason over.
+
+## Evidence gates
+
+Jev always runs if there's any evidence at all, but the Inspector only trusts
+what it says once a minimum bar is met. Below that bar, the panel shows
+**"Not enough signal"** instead of a label — the honest answer when there
+simply isn't enough to go on yet. For persona the bar is at least two items
+added to the basket — views don't count, because persona is judged only on
+what the shopper actually chose.
+
+That's different from **unclear**, which is Jev's own answer when there's
+*plenty* of evidence but it doesn't add up to one clean purpose (for example,
+a basket of unrelated items). "Not enough signal" is a code decision made
+before Jev's answer is trusted; "unclear" is Jev's answer once there's enough
+to judge.
+
+A brand-new, empty session is its own case: no evidence exists yet, so
+nothing is scored at all.
+
+## A few things folded together
+
+- **"Treat" was folded into meal and foodie_explorer.** A separate "treat"
+  category didn't hold up as its own occasion or trait — premium ingredients
+  and indulgence are what foodie_explorer already captures, and a one-off
+  indulgent dinner is still just a meal.
+- **The weekly/top-up split moved out of Jev and into code.** It's a
+  threshold on aisle count and item count — a hard rule with no reading
+  involved, so it belongs where hard rules belong.
+
+## How accuracy is checked
+
+A set of golden fixtures — journeys built from the real catalogue, shaped the
+way Signals would actually serve them — is run through the same pipeline Jev
+uses. Each fixture has an expected label, plus a couple of deliberate "trap"
+cases designed to look like a trait but fall just short of it (for example, a
+plant-based-looking basket that still has bacon in it). Passing means the
+expected label wins clearly, and the traps stay below threshold. This is how
+the classification is checked, not guessed at.
 
 ## Honest limits
 
-- **It answers with probabilities, not certainties.** Every answer carries a
-  confidence figure, and a low one is a signal to act gently rather than a
-  failure.
-- **A brand-new session has nothing to read.** No searches and no views means no
-  meaningful judgment. That is expected, not an error.
-- **The weights are a starting point.** They were chosen by hand and should be
-  tuned against real outcomes before anyone trusts the number for a business
-  decision.
-- **Scores are for ranking, not arithmetic.** A high score means this shopper
-  ranks above others, not that that percentage of such shoppers will check out.
+- **No real outcome data yet.** Thresholds and splits were chosen by hand and
+  should be tuned against real shopper behaviour before anyone relies on them
+  for a business decision.
+- **Names, not quantities.** What's handed to Jev is what was added, removed
+  and searched — not how many of each. Quantity-sensitive judgments (a single
+  dinner vs. a party) rely on the words and the timeline, not a count.
+- **The session's memory is limited.** The event timeline holds at most 50
+  events from the last 60 minutes. Older activity simply isn't there to read.
+- **It answers with probabilities, not certainties.** A low-confidence answer
+  is a signal to act gently, not a failure.
+- **Show-only for now.** Suggested actions are displayed in the Inspector;
+  nothing here is wired up to actually change the live site yet.

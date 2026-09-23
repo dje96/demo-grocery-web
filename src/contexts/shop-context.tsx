@@ -33,13 +33,12 @@ import {
  *   • BASKET  — localStorage (`basket-cart`). Survives reloads and tab closes,
  *     so a presenter can build a basket, reload with UTM, and still have it.
  *   • ACTIVITY — sessionStorage (`basket-activity`). Products viewed, searches
- *     run, aisles visited, page count and session start. Since Phase 4 the
- *     Intent tab is served from real Signals attributes (/api/intent reads the
- *     `demo_grocery` service); this local activity store is kept as the
- *     clearly-labelled "Local" fallback source for that tab.
+ *     run, aisles visited, page count and session start. The Intent tab is
+ *     served entirely from Signals (/api/intent reads the `demo_grocery`
+ *     service); only `activityMeta` (page count, session start) is read from
+ *     here, as display-only panel metrics.
  *
- * Every count and total exposed here is computed IN CODE. Nothing downstream
- * (including the Jev model) is ever asked to tally anything.
+ * Every count and total exposed here is computed IN CODE.
  *
  * CDI: this provider is also the single seam for the Add To Basket / Remove
  * From Basket / View Product events. Every add site in the app (AddToBasket,
@@ -90,33 +89,6 @@ export interface PlacedOrder {
   name: string;
 }
 
-/** The exact JSON posted to /api/intent. Named fields, pre-computed numbers. */
-export interface IntentState {
-  basket: {
-    item_count: number;
-    distinct_products: number;
-    subtotal_gbp: number;
-    items: { name: string; aisle: string; quantity: number; price_gbp: number }[];
-  };
-  browsing: {
-    products_viewed: { name: string; aisle: string }[];
-    search_queries: string[];
-    aisles_visited: string[];
-  };
-  session: {
-    page_count: number;
-    duration_minutes: number;
-    distinct_aisles_visited: number;
-    products_viewed_count: number;
-    search_query_count: number;
-  };
-  delivery: {
-    free_delivery_threshold_gbp: number;
-    amount_to_free_delivery_gbp: number;
-    qualifies_for_free_delivery: boolean;
-  };
-}
-
 interface ShopContextValue {
   // basket
   lines: CartLine[];
@@ -141,10 +113,9 @@ interface ShopContextValue {
   recordProductView: (product: Product) => void;
   recordSearch: (query: string) => void;
   recordAisleVisit: (aisleName: string) => void;
-  intentState: () => IntentState;
   /** Client-computed session counters the Signals group does not carry
    *  (page count, session start). Posted alongside the session id to
-   *  /api/intent so the numeric side of the Jev state stays computed in code. */
+   *  /api/intent and shown as panel metrics — never part of the Jev state. */
   activityMeta: () => { pageCount: number; startedAt: number };
   // order
   lastOrder: PlacedOrder | null;
@@ -202,7 +173,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   const [lastOrder, setLastOrder] = useState<PlacedOrder | null>(null);
   const [hydrated, setHydrated] = useState(false);
   // Activity lives in a ref: it changes on every page view and never needs to
-  // re-render the tree. The Intent panel reads it on demand.
+  // re-render the tree. The Intent panel reads its counters on demand.
   const activityRef = useRef<Activity>(EMPTY_ACTIVITY);
   // Mirror of `lines`, so the basket mutators can compute the NEXT lines (and
   // therefore the subtotal AFTER the action) outside a setState updater. Doing
@@ -470,49 +441,6 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     [persistActivity]
   );
 
-  /**
-   * Build the state posted to /api/intent. Every count, total and duration is
-   * computed here, in code — the model is only ever asked to make a semantic
-   * judgment, never to tally.
-   */
-  const intentState = useCallback((): IntentState => {
-    const a = activityRef.current;
-    const durationMinutes = Math.max(
-      0,
-      Math.round((Date.now() - a.startedAt) / 60000)
-    );
-    return {
-      basket: {
-        item_count: itemCount,
-        distinct_products: resolved.length,
-        subtotal_gbp: subtotal,
-        items: resolved.map((l) => ({
-          name: l.product.name,
-          aisle: l.product.aisle,
-          quantity: l.qty,
-          price_gbp: l.product.price,
-        })),
-      },
-      browsing: {
-        products_viewed: a.viewed.map((v) => ({ name: v.name, aisle: v.aisle })),
-        search_queries: a.searches,
-        aisles_visited: a.aisles,
-      },
-      session: {
-        page_count: a.pageCount,
-        duration_minutes: durationMinutes,
-        distinct_aisles_visited: a.aisles.length,
-        products_viewed_count: a.viewed.length,
-        search_query_count: a.searches.length,
-      },
-      delivery: {
-        free_delivery_threshold_gbp: FREE_DELIVERY_THRESHOLD,
-        amount_to_free_delivery_gbp: amountToFreeDelivery,
-        qualifies_for_free_delivery: amountToFreeDelivery === 0 && subtotal > 0,
-      },
-    };
-  }, [itemCount, resolved, subtotal, amountToFreeDelivery]);
-
   const activityMeta = useCallback(
     () => ({
       pageCount: activityRef.current.pageCount,
@@ -595,7 +523,6 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       recordProductView,
       recordSearch,
       recordAisleVisit,
-      intentState,
       activityMeta,
       lastOrder,
       placeOrder,
@@ -622,7 +549,6 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       recordProductView,
       recordSearch,
       recordAisleVisit,
-      intentState,
       activityMeta,
       lastOrder,
       placeOrder,
