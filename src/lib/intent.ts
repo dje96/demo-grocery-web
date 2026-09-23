@@ -4,22 +4,24 @@
  *   Signals serves facts · code applies policy · Jev (TypeSafe System One) reads meaning.
  *
  * Each label drives an action:
- *   stage    = WHEN / how hard to intervene
+ *   stage    = WHEN / how hard to intervene (rules in code, not Jev)
  *   occasion = WHAT to show
  *   persona  = HOW to frame it (or, for plant_based, what to FILTER out)
  *
- * This module owns three things, all pure (no Next, no `server-only`, no
+ * This module owns four things, all pure (no Next, no `server-only`, no
  * credentials) so the eval script runs exactly the same code as the route:
  *
- *   1. QUESTIONS            — stage (Choice, 5), occasion (Choice, 4), five
- *                             persona Nouls. Structured criteria: means / signs /
- *                             not_this_if, so neighbouring options contrast.
+ *   1. QUESTIONS            — occasion (Choice, 4) and four persona Nouls.
+ *                             Structured criteria: means / signs / not_this_if,
+ *                             so neighbouring options contrast. Stage is NOT
+ *                             asked — deriveStage() reads it from Signals.
  *   2. buildIntentInputs()  — Signals attributes (+ Event Log narrative) → the
  *                             Jev state (lists and words ONLY — no counts,
  *                             ratios, totals or delivery maths) plus the panel
  *                             metrics and evidence counts, returned separately.
- *   3. applyIntentPolicy()  — Jev's raw answers → what the panel claims:
- *                             checkout/purchased stage override, evidence gates,
+ *   3. deriveStage()        — stage from Signals facts, by ordered rules.
+ *   4. applyIntentPolicy()  — Jev's raw answers → what the panel claims:
+ *                             derived stage, evidence gates,
  *                             restock weekly/top_up split, persona headline +
  *                             plant_based filter, and a suggested action per label.
  *
@@ -71,71 +73,6 @@ const PERSONA_EVIDENCE = {
 };
 
 export const QUESTIONS = {
-  stage: choice(
-    {
-      question: "Decide the shopper's mindset RIGHT NOW on an online grocery site.",
-      evidence: [
-        '`browsing.search_queries` and `browsing.products_viewed`',
-        '`added_this_session` and `removed_this_session`',
-        '`session_timeline` when present — an oldest-to-newest account of what they did',
-      ],
-      weighting:
-        'Weight the most recent activity most. Earlier activity only shows how they got here.',
-      removals: REMOVAL_RULE,
-      repeated_searches:
-        'Identical search rows next to each other are ONE search (the site logs a quick search and the submitted search separately). Do not read them as searching around.',
-    },
-    {
-      browsing: {
-        means: 'No settled goal yet — looking for ideas.',
-        signs: [
-          'views spread across unrelated products and aisles',
-          'broad searches, or none',
-          'little or nothing added',
-        ],
-        not_this_if: 'They keep returning to one kind of product (that is comparing).',
-      },
-      on_a_mission: {
-        means: 'Knows what they want and is still finding it.',
-        signs: [
-          'searches name specific items',
-          'views go straight to the products matching those searches',
-          'the basket is still being built',
-        ],
-        not_this_if: 'They already have what they came for (that is ready_to_buy).',
-      },
-      comparing: {
-        means: 'Weighing near-substitutes of one thing and has not chosen.',
-        signs: [
-          'several brands, sizes or ranges of the SAME product viewed (e.g. Marketside vs Marketside Select vs Marketside Basics)',
-          'going back and forth between those alternatives',
-        ],
-        not_this_if: 'The alternatives are different kinds of product (that is browsing).',
-      },
-      ready_to_buy: {
-        means: 'Has what they came for and is finishing up.',
-        signs: [
-          'a coherent basket',
-          'recent actions are last additions or re-checking items already added',
-          'a basket of everyday staples being restocked counts as decided',
-          'a removal undone by adding the same item back does not change this',
-        ],
-        not_this_if:
-          'Items were recently removed and stayed out, or swapped for cheaper versions (that is hesitating).',
-      },
-      hesitating: {
-        means: 'Had a basket and is now pulling back or stalling.',
-        signs: [
-          'an item was removed and STAYS out — not added back later in the timeline',
-          'an item was swapped for a cheaper or plainer version',
-          'stalling: re-viewing basket items again and again without adding or moving on',
-        ],
-        not_this_if:
-          'An item was removed and then the same item was added back — that is a correction, not doubt. Likewise a removal replaced straight away while they carry on adding.',
-      },
-    }
-  ),
-
   occasion: choice(
     {
       question:
@@ -148,27 +85,31 @@ export const QUESTIONS = {
       ],
       removals: REMOVAL_RULE,
       strong_evidence:
-        'Searches naming an event or a dish ("bbq", "birthday cake", "lasagne") are strong evidence.',
+        'Searches naming an event or a dish ("bbq", "birthday cake", "lasagne", "spaghetti") are strong evidence.',
       quantity:
         'Quantities (shown in the timeline) separate a meal for a household from an event for a group.',
     },
     {
       restock: {
-        means: 'Replenishing everyday household items — any size of shop, from a few essentials to a full weekly stock-up.',
+        means:
+          'Replenishing everyday household items, any size of shop. Staple pantry, dairy and bakery items count as restock even if some could be cooked together.',
         signs: [
-          'staples such as milk, bread, eggs, fruit, cleaning or laundry items',
-          'items that do not build one dish',
+          'staples such as milk, bread, eggs, pasta, tinned tomatoes, cheese, fruit, cleaning or laundry items',
+          'no search naming a dish',
         ],
-        not_this_if: 'The items combine into one dish or dinner (that is meal).',
+        not_this_if:
+          'The items clearly build one named dish (that is meal) or feed a group (that is event).',
       },
       meal: {
-        means: 'Building one dish or one dinner.',
+        means: 'Building one specific dish or dinner you could name.',
         signs: [
-          'ingredients that fit together, e.g. pasta, tomatoes and mozzarella',
+          'a search naming a dish ("lasagne", "curry", "spaghetti")',
+          'at least one ingredient that only makes sense for that dish alongside its partners, e.g. lasagne sheets with mince and béchamel',
           'a premium dinner such as steak with wine and dessert counts',
           'ordinary quantities for one household',
         ],
-        not_this_if: 'The food is for a group or a celebration (that is event).',
+        not_this_if:
+          'The items are everyday staples that happen to go together (pasta, tinned tomatoes, cheese, bread, milk) with no dish-specific ingredient or dish search (that is restock). Or the food is for a group or a celebration (that is event).',
       },
       event: {
         means: 'Feeding a group or celebrating.',
@@ -187,8 +128,8 @@ export const QUESTIONS = {
     }
   ),
 
-  /* ── Persona — five Nouls ─────────────────────────────────────────────
-   * Traits co-occur (budget + foodie is a real shopper), so each is its own
+  /* ── Persona — four Nouls ─────────────────────────────────────────────
+   * Traits co-occur (budget + health is a real shopper), so each is its own
    * Noul with an independent probability. The headline and the plant_based
    * filter are policy, applied in code (applyIntentPolicy), never asked. */
   is_budget_driven: noul(
@@ -196,7 +137,7 @@ export const QUESTIONS = {
       question: 'Is price steering this grocery shopper\'s choices?',
       evidence: PERSONA_EVIDENCE,
       rule:
-        'If most of the items in `added_this_session` also appear in `on_offer_added`, that alone is a yes — whatever the range or brand, including Marketside Select and premium items. A deal-hunting foodie is budget-driven AND foodie.',
+        'If most of the items in `added_this_session` also appear in `on_offer_added`, that alone is a yes — whatever the range or brand, including Marketside Select and premium items.',
       note: NO_EVIDENCE_IS_NO,
     },
     {
@@ -251,29 +192,6 @@ export const QUESTIONS = {
     }
   ),
 
-  is_foodie_explorer: noul(
-    {
-      question: 'Is this grocery shopper choosing quality, specialty or indulgence?',
-      evidence: PERSONA_EVIDENCE,
-      caution:
-        'The catalogue is full of Marketside Select items and evocative product names. One such item, or a descriptive name, is NOT evidence on its own.',
-      note: NO_EVIDENCE_IS_NO,
-    },
-    {
-      true: {
-        means:
-          'Premium or specialty picks are the shopper\'s pattern — chosen over plainer options — or the added items are clearly indulgent.',
-        signs: [
-          'most of what they added is Marketside Select or specialty rather than the plain version',
-          'wine or champagne, fine chocolate, desserts',
-          'premium cuts such as aged steak',
-        ],
-      },
-      false:
-        'No such pattern: an ordinary everyday basket, even if it happens to include one Select item.',
-    }
-  ),
-
   is_plant_based: noul(
     {
       question:
@@ -304,7 +222,6 @@ export type IntentQuestions = typeof QUESTIONS;
 export const STAGE_ACTIONS: Record<string, string> = {
   browsing: 'Show inspiration / recipes',
   on_a_mission: 'Speed them up: direct links, “did you mean”',
-  comparing: 'Comparison help, reviews, price-per-unit',
   ready_to_buy: 'Get out of the way, nudge to checkout',
   hesitating: 'Reassurance or an offer',
   checking_out: 'Keep checkout frictionless — no interruptions',
@@ -323,7 +240,6 @@ export const PERSONA_ACTIONS: Record<string, string> = {
   budget_driven: 'Lead with offers, own-brand swaps, price-per-unit',
   health_conscious: 'Healthier swaps, nutrition badges',
   convenience_seeking: 'Ready-made alternatives, one-click bundles, “ready in X min”',
-  foodie_explorer: 'Specialty / premium variants, pairing, recipe inspiration',
   generalist: 'Default framing',
 };
 
@@ -496,6 +412,126 @@ export function hasAnyEvidence(e: IntentEvidence): boolean {
 }
 
 /* ---------------------------------------------------------------------------
+ * Stage — ordered rules over Signals facts (no Jev)
+ * ------------------------------------------------------------------------- */
+
+export interface StageResult {
+  /** The derived stage (shown only when `enough_signal`). */
+  label: string;
+  /** Which rule fired and why, in words — e.g. "Chopped Tomatoes removed,
+   *  not re-added". Shown in the Inspector. */
+  rule: string;
+  enough_signal: boolean;
+  action: string | null;
+}
+
+interface TimelineRow {
+  kind: 'search' | 'add' | 'remove';
+  product: string | null;
+  qty: number;
+}
+
+/** Quoted value of `key` in a narrative row's `{…}` context, unescaped. */
+function field(line: string, key: string): string | null {
+  const m = line.match(new RegExp(`\\b${key}: (['"])((?:\\\\.|(?!\\1).)*)\\1`));
+  return m ? m[2].replace(/\\(.)/g, '$1') : null;
+}
+
+/**
+ * The search / add / remove rows of the Event Log narrative, oldest→newest.
+ * `null` when there is no timeline (new session, Event Log unavailable).
+ */
+function timelineRows(timeline: string | undefined): TimelineRow[] | null {
+  if (!timeline) return null;
+  const rows: TimelineRow[] = [];
+  for (const line of timeline.split('\n')) {
+    if (line.includes('search_performed')) {
+      rows.push({ kind: 'search', product: null, qty: 0 });
+      continue;
+    }
+    const action = field(line, 'action');
+    if (action !== 'add_to_cart' && action !== 'remove_from_cart') continue;
+    const qty = Number(line.match(/\bquantity: (\d+)/)?.[1] ?? 1);
+    rows.push({ kind: action === 'add_to_cart' ? 'add' : 'remove', product: field(line, 'product'), qty });
+  }
+  return rows;
+}
+
+/**
+ * Removed items that are still OUT of the basket. Signals' lists are unique
+ * lists of everything ever added / ever removed, so a re-added item sits in
+ * both and the lists alone can't tell. The timeline resolves it: an item is
+ * back in when its adds minus removes over the timeline is > 0.
+ *
+ * Approximation: with no timeline, or when an item's rows have aged out of
+ * the Event Log window (50 events / 60 min), a removal counts as outstanding.
+ */
+function outstandingRemovals(removed: string[], rows: TimelineRow[] | null): string[] {
+  return removed.filter((name) => {
+    const own = rows?.filter((r) => r.product === name) ?? [];
+    if (own.length === 0) return true;
+    const net = own.reduce((n, r) => n + (r.kind === 'add' ? r.qty : -r.qty), 0);
+    return net <= 0;
+  });
+}
+
+function quoted(xs: string[]): string {
+  return xs.map((x) => `“${x}”`).join(', ');
+}
+
+function items(n: number): string {
+  return `${n} item${n === 1 ? '' : 's'}`;
+}
+
+/**
+ * Stage in code, first matching rule wins:
+ *   purchased / checking_out  Signals counters
+ *   hesitating                an item removed and not added back
+ *   ready_to_buy              ≥ readyMinItems in the basket, nothing left out
+ *   on_a_mission              searched, then added (basket still small)
+ *   browsing                  anything else
+ * "comparing" is deliberately absent: no honest rule detects it.
+ */
+export function deriveStage(inputs: IntentInputs): StageResult {
+  const { metrics, evidence, state } = inputs;
+  const g = intentPolicy.gates;
+  const rows = timelineRows(state.session_timeline);
+  const out = outstandingRemovals(state.removed_this_session, rows);
+  const basket = state.added_this_session.filter((n) => !out.includes(n));
+  const searches = state.browsing.search_queries;
+  const firstSearch = rows?.findIndex((r) => r.kind === 'search') ?? -1;
+  const addedAfterSearch = rows
+    ? firstSearch >= 0 && rows.slice(firstSearch).some((r) => r.kind === 'add')
+    : searches.length > 0 && basket.length > 0;
+
+  let label: string;
+  let rule: string;
+  let counter = false;
+  if (metrics.purchase_completed > 0) {
+    [label, rule, counter] = ['purchased', 'purchase completed (Signals counter)', true];
+  } else if (metrics.checkout_started > 0) {
+    [label, rule, counter] = ['checking_out', 'checkout started (Signals counter)', true];
+  } else if (out.length > 0) {
+    label = 'hesitating';
+    rule = `${out.join(', ')} removed, not re-added`;
+  } else if (basket.length >= intentPolicy.stage.readyMinItems) {
+    label = 'ready_to_buy';
+    rule = `${items(basket.length)} in basket, nothing left out`;
+  } else if (addedAfterSearch) {
+    label = 'on_a_mission';
+    rule = `searched ${quoted(searches)}, then added — ${items(basket.length)} in basket`;
+  } else {
+    label = 'browsing';
+    rule = `${evidence.views} views, ${evidence.searches} searches, ${items(basket.length)} in basket`;
+  }
+  const enough =
+    counter ||
+    evidence.views + evidence.searches >= g.stageMinViewsOrSearches ||
+    evidence.adds >= g.stageMinAdds;
+  return { label, rule, enough_signal: enough, action: enough ? STAGE_ACTIONS[label] ?? null : null };
+}
+
+/* ---------------------------------------------------------------------------
  * Policy — Jev's raw answers → what the panel claims
  * ------------------------------------------------------------------------- */
 
@@ -505,20 +541,6 @@ interface RawChoice {
   choice: string;
   confidence: number;
   probabilities: Record<string, number>;
-}
-
-export interface StageResult {
-  /** What the panel shows: Jev's choice, or `checking_out` / `purchased`
-   *  when the Signals counters say so. */
-  label: string;
-  /** Jev's own choice — still reported when code overrides it. */
-  jev_choice: string;
-  /** Set when the label came from Signals counters, not Jev. */
-  override: 'checking_out' | 'purchased' | null;
-  confidence: number;
-  probabilities: Record<string, number>;
-  enough_signal: boolean;
-  action: string | null;
 }
 
 export interface OccasionResult {
@@ -538,7 +560,7 @@ export interface PersonaResult {
   /** e.g. "Budget-driven · plant-based". */
   headline: string;
   confidence: number;
-  /** All five raw Noul probabilities. */
+  /** All four raw Noul probabilities. */
   traits: Record<string, number>;
   /** Framing traits at or above threshold, strongest first. */
   active: string[];
@@ -559,7 +581,6 @@ const FRAMING_TRAITS = [
   'budget_driven',
   'health_conscious',
   'convenience_seeking',
-  'foodie_explorer',
 ] as const;
 
 function titleCase(trait: string): string {
@@ -579,22 +600,8 @@ export function applyIntentPolicy(
   answers: Answers,
   inputs: IntentInputs
 ): IntentPolicyResult {
-  const { metrics, evidence, state } = inputs;
+  const { evidence, state } = inputs;
   const g = intentPolicy.gates;
-
-  // ── Stage: Signals counters beat Jev for checkout / purchase ──────────
-  const stageRaw = copyChoice(answers.stage);
-  const override: StageResult['override'] =
-    metrics.purchase_completed > 0
-      ? 'purchased'
-      : metrics.checkout_started > 0
-        ? 'checking_out'
-        : null;
-  const stageEnough =
-    override !== null ||
-    evidence.views + evidence.searches >= g.stageMinViewsOrSearches ||
-    evidence.adds >= g.stageMinAdds;
-  const stageLabel = override ?? stageRaw.choice;
 
   // ── Occasion + restock weekly / top_up split ──────────────────────────
   const occRaw = copyChoice(answers.occasion);
@@ -614,7 +621,6 @@ export function applyIntentPolicy(
     budget_driven: answers.is_budget_driven.noul,
     health_conscious: answers.is_health_conscious.noul,
     convenience_seeking: answers.is_convenience_seeking.noul,
-    foodie_explorer: answers.is_foodie_explorer.noul,
     plant_based: answers.is_plant_based.noul,
   };
   const active = FRAMING_TRAITS.filter(
@@ -627,15 +633,7 @@ export function applyIntentPolicy(
   const topFraming = Math.max(...FRAMING_TRAITS.map((t) => traits[t]));
 
   return {
-    stage: {
-      label: stageLabel,
-      jev_choice: stageRaw.choice,
-      override,
-      confidence: stageRaw.confidence,
-      probabilities: stageRaw.probabilities,
-      enough_signal: stageEnough,
-      action: stageEnough ? STAGE_ACTIONS[stageLabel] ?? null : null,
-    },
+    stage: deriveStage(inputs),
     occasion: {
       label: restockSplit ? `restock · ${restockSplit}` : occRaw.choice,
       jev_choice: occRaw.choice,
@@ -669,8 +667,8 @@ export interface IntentEvaluation extends IntentPolicyResult {
 }
 
 /**
- * All seven questions go in ONE `systemOne` call — answered in parallel, far
- * cheaper than seven round trips. Used by the route and the eval script alike.
+ * All five questions go in ONE `systemOne` call — answered in parallel, far
+ * cheaper than five round trips. Used by the route and the eval script alike.
  */
 export async function evaluateIntent(
   client: TypeSafeClient,

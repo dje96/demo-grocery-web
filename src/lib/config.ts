@@ -84,18 +84,20 @@ export interface NavItem {
 }
 
 /**
- * A published Signals intervention clause, mirrored in the Signals Inspector so
- * presenters can watch each eligibility criterion tick from unmet → met.
- * Keep in lock-step with the intervention recipe you built in Console.
+ * A published Signals intervention this demo surfaces. Signals owns the rule
+ * (it fires on the `grocery_shopper_intent` attributes); `rule` is mirrored
+ * here only so the Signals Inspector can show presenters what each one means.
+ * Keep in lock-step with the intervention you published in Console.
  */
-export interface InterventionClause {
-  /** Stream attribute name returned by the session service. */
-  attribute: string;
-  /** Human label shown in the inspector, e.g. "sample_play_count ≥ 2". */
+export interface InterventionDef {
+  /** Intervention name as published in Signals (the push payload's `name`). */
+  name: string;
+  /** Short id used as the ecommerce `promotion.id` on interaction events. */
+  promotionId: string;
+  /** Human label for the Inspector / presenter trigger button. */
   label: string;
-  /** Comparison operator against `threshold`. */
-  operator: "gte" | "gt" | "lte" | "lt" | "eq";
-  threshold: number;
+  /** Human-readable eligibility rule, e.g. "stage = hesitating". */
+  rule: string;
 }
 
 export interface SnowplowConfig {
@@ -133,10 +135,14 @@ export interface SnowplowConfig {
   idService: string;
   /** Attribute key the id service is keyed on. Always `domain_userid`. */
   idAttributeKey: string;
-  /** Name of the published intervention the demo surfaces. */
-  interventionName: string;
-  /** Eligibility clauses mirrored in the Signals Inspector. */
-  interventionClauses: InterventionClause[];
+  /** Published interventions the demo surfaces (session-keyed, SSE push). */
+  interventions: InterventionDef[];
+  /**
+   * Intent attributes Signals keeps for the session (attribute group
+   * `grocery_shopper_intent`, served via `signalsService`). Highlighted in the
+   * Inspector; absent until that group is published.
+   */
+  intentAttributes: string[];
 }
 
 /**
@@ -244,26 +250,28 @@ export const siteConfig: SiteConfig = {
     // Shared, cross-demo service — leave as-is.
     idService: "snowplow_id_retrieval",
     idAttributeKey: "domain_userid",
-    interventionName: "demo_grocery_basket_nudge",
-    interventionClauses: [
+    // Phase 2 interventions — Signals fires these off the
+    // `grocery_shopper_intent` attributes (written from classify_intent).
+    interventions: [
       {
-        attribute: "product_view_count",
-        label: "product_view_count ≥ 3",
-        operator: "gte",
-        threshold: 3,
+        name: "grocery_complete_recipe",
+        promotionId: "complete_the_recipe",
+        label: "Complete the recipe",
+        rule: "stage ∈ {on_a_mission, ready_to_buy} AND occasion = meal",
       },
       {
-        attribute: "add_to_basket_count",
-        label: "add_to_basket_count ≥ 2",
-        operator: "gte",
-        threshold: 2,
+        name: "grocery_hesitation_rescue",
+        promotionId: "hesitation_rescue",
+        label: "Hesitation rescue",
+        rule: "stage = hesitating",
       },
-      {
-        attribute: "page_ping_count",
-        label: "page_ping_count ≥ 5",
-        operator: "gte",
-        threshold: 5,
-      },
+    ],
+    intentAttributes: [
+      "intent_stage",
+      "intent_occasion",
+      "intent_persona",
+      "intent_plant_filter",
+      "intent_classify_count",
     ],
   },
   warehouse: {
@@ -358,7 +366,7 @@ export const siteConfig: SiteConfig = {
 // Read by src/lib/intent.ts; the eval script uses the same values.
 
 export const intentPolicy = {
-  /** Framing traits (budget / health / convenience / foodie) count as active
+  /** Framing traits (budget / health / convenience) count as active
    *  at or above this Noul probability. The highest active one headlines. */
   personaFramingThreshold: 0.6,
   /** plant_based is a FILTER (exclude meat, fish & dairy from suggestions),
@@ -370,6 +378,13 @@ export const intentPolicy = {
   weeklyRequiredAisle: "Household",
   /** … OR at least this many add-to-basket actions. Otherwise "top_up". */
   weeklyMinAdds: 8,
+  /** Stage is derived in code (deriveStage in src/lib/intent.ts), not by Jev:
+   *  hesitating → ready_to_buy → on_a_mission → browsing, first match wins. */
+  stage: {
+    /** ready_to_buy: at least this many distinct items in the basket and no
+     *  removal left outstanding. Fewer, after a search → on_a_mission. */
+    readyMinItems: 3,
+  },
   /** Evidence gates — Jev still runs on ANY evidence; a gate only controls
    *  whether the panel claims a label or shows "Not enough signal". */
   gates: {
@@ -383,6 +398,34 @@ export const intentPolicy = {
      *  only (a view shows curiosity, not preference). */
     personaMinAdds: 2,
   },
+} as const;
+
+// ─── Intervention content (phase 2) ─────────────────────────────────────────
+//
+// What each intervention OFFERS. Signals decides WHEN (the rule); the banner
+// decides HOW from the intent labels (persona framing, plant filter).
+
+export const interventionContent = {
+  /**
+   * PLACEHOLDER recipe for `grocery_complete_recipe` — hard-coded until a
+   * recipe is derived from the basket. SKUs are real catalogue products.
+   * `plantSwap` replaces an item when the plant-based filter is active;
+   * a non-vegan item with no swap is dropped.
+   */
+  recipe: {
+    placeholder: true,
+    name: "Spaghetti al pomodoro",
+    readyInMinutes: 20,
+    items: [
+      { sku: "PAN-0502" }, // Bronze Die Spaghetti
+      { sku: "PAN-0503" }, // Italian Chopped Tomatoes
+      { sku: "DRY-0207", plantSwap: "PRD-0113" }, // Mozzarella → Fresh Basil
+      { sku: "PAN-0501" }, // Cold-Pressed Olive Oil
+    ] as { sku: string; plantSwap?: string }[],
+  },
+  /** `grocery_hesitation_rescue` offer for budget-driven shoppers. Must be a
+   *  code the basket accepts (PROMOS in shop-context.tsx). */
+  hesitation: { code: "FRESH10", pct: 10 },
 } as const;
 
 // ─── Content catalog ─────────────────────────────────────────────────────────

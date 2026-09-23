@@ -6,6 +6,7 @@ _A guide on how to implement tracking for the generated Event Specifications._
 **Table of contents:**
 - [Remove From Basket](#remove-from-basket)
 - [View Product](#view-product)
+- [Classify Shopper Intent](#classify-shopper-intent)
 - [Progress Checkout Step](#progress-checkout-step)
 - [Add To Basket](#add-to-basket)
 - [Complete Transaction](#complete-transaction)
@@ -22,8 +23,8 @@ _A guide on how to implement tracking for the generated Event Specifications._
 | **Source Application/s** | None selected |
 | **Event Data Structure** | snowplow_ecommerce_action/1-0-2 |
 | **Entity Data Structures** | cart/1-0-0, product/1-0-0 |
-| **Code** | [Link](./snowplow.ts#L254) |
-| **Data Product Domain** | _N/A_ |
+| **Code** | [Link](./snowplow.ts#L508) |
+| **Data Product Domain** | Product |
 
 ### Implementation Instructions for snowplow_ecommerce_action event properties
 
@@ -53,8 +54,8 @@ cart | ✅ | Exactly `1`
 | **Source Application/s** | None selected |
 | **Event Data Structure** | snowplow_ecommerce_action/1-0-2 |
 | **Entity Data Structures** | product/1-0-0 |
-| **Code** | [Link](./snowplow.ts#L279) |
-| **Data Product Domain** | _N/A_ |
+| **Code** | [Link](./snowplow.ts#L534) |
+| **Data Product Domain** | Product |
 
 ### Implementation Instructions for snowplow_ecommerce_action event properties
 
@@ -73,6 +74,30 @@ product | ✅ | Exactly `1`
 
 
 
+## [Classify Shopper Intent](https://console.snowplowanalytics.com/b12539df-a711-42bd-bdfa-175308c55fd5/data-products/9e64295e-1e49-40d3-81b3-71a9b1873e84/event-specifications/1cd8daca-5f4e-4ba2-8f7d-eaa51cfed2fb)
+
+|       |  |
+| ----------- | ----------- |  
+| **Id** | 1cd8daca-5f4e-4ba2-8f7d-eaa51cfed2fb |
+| **Version** | 0 |
+| **Data Product Id** | 9e64295e-1e49-40d3-81b3-71a9b1873e84 | 
+| **Source Application/s** | None selected |
+| **Event Data Structure** | classify_intent/1-0-0 |
+| **Entity Data Structures** | agent/1-0-0, shopper_intent/1-0-0 |
+| **Code** | [Link](./snowplow.ts#L456) |
+| **Data Product Domain** | Product |
+
+
+
+#### Entity Cardinality Rules
+|    Name   | Required  | Number of entities  |
+| ----------- | ----------- |  ----------- |
+shopper_intent | ✅ | Exactly `1`
+agent | ✅ | Exactly `1`
+
+
+
+
 ## [Progress Checkout Step](https://console.snowplowanalytics.com/b12539df-a711-42bd-bdfa-175308c55fd5/data-products/9e64295e-1e49-40d3-81b3-71a9b1873e84/event-specifications/3e6d45e9-ce73-48ff-9fa8-7d1b69726f8a)
 
 |       |  |
@@ -83,8 +108,8 @@ product | ✅ | Exactly `1`
 | **Source Application/s** | None selected |
 | **Event Data Structure** | snowplow_ecommerce_action/1-0-2 |
 | **Entity Data Structures** | cart/1-0-0, checkout_step/1-0-0 |
-| **Code** | [Link](./snowplow.ts#L304) |
-| **Data Product Domain** | _N/A_ |
+| **Code** | [Link](./snowplow.ts#L560) |
+| **Data Product Domain** | Product |
 
 ### Implementation Instructions for snowplow_ecommerce_action event properties
 
@@ -114,8 +139,8 @@ cart | ✅ | Exactly `1`
 | **Source Application/s** | None selected |
 | **Event Data Structure** | snowplow_ecommerce_action/1-0-2 |
 | **Entity Data Structures** | cart/1-0-0, product/1-0-0 |
-| **Code** | [Link](./snowplow.ts#L329) |
-| **Data Product Domain** | _N/A_ |
+| **Code** | [Link](./snowplow.ts#L586) |
+| **Data Product Domain** | Product |
 
 ### Implementation Instructions for snowplow_ecommerce_action event properties
 
@@ -145,8 +170,8 @@ cart | ✅ | Exactly `1`
 | **Source Application/s** | None selected |
 | **Event Data Structure** | snowplow_ecommerce_action/1-0-2 |
 | **Entity Data Structures** | product/1-0-0, transaction/1-0-0 |
-| **Code** | [Link](./snowplow.ts#L354) |
-| **Data Product Domain** | _N/A_ |
+| **Code** | [Link](./snowplow.ts#L612) |
+| **Data Product Domain** | Product |
 
 ### Implementation Instructions for snowplow_ecommerce_action event properties
 
@@ -176,8 +201,8 @@ product | ✅ | Between `1` and `100`
 | **Source Application/s** | None selected |
 | **Event Data Structure** | search_performed/1-0-0 |
 | **Entity Data Structures** |  |
-| **Code** | [Link](./snowplow.ts#L228) |
-| **Data Product Domain** | _N/A_ |
+| **Code** | [Link](./snowplow.ts#L481) |
+| **Data Product Domain** | Product |
 
 
 

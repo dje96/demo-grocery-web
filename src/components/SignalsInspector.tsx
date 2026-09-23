@@ -16,14 +16,18 @@ import {
 } from 'lucide-react';
 
 import {
+  getFiredInterventions,
   getSessionId,
   getUserId,
   triggerIntervention,
-  INTERVENTION_NAME,
+  clearIntervention,
+  INTERVENTION_EVENT,
+  INTERVENTION_CLEARED_EVENT,
+  type FiredIntervention,
 } from '@/lib/snowplow-config';
-import { siteConfig } from '@/lib/config';
+import { intentPolicy, siteConfig } from '@/lib/config';
+import { classifyIntent, useIntent, type IntentResult } from '@/lib/intent-client';
 import { useUser } from '@/contexts/user-context';
-import { useShop } from '@/contexts/shop-context';
 
 /* ---------------------------------------------------------------------------
  * Presenter-only panel that visualizes the live Snowplow Signals state for the
@@ -40,12 +44,14 @@ import { useShop } from '@/contexts/shop-context';
  *             mimicking "batch attrs appear once Snowplow Identity resolves".
  *   • Intent (3rd tab) — a purchase-intent read from TypeSafe's Jev model,
  *     served by /api/intent, whose state is built server-side from the LIVE
- *     Signals `demo_grocery` service. Fetched on tab open and on an explicit
- *     "re-evaluate" — deliberately NOT polled, because each call costs tokens.
- *     Show-only: labels, suggested actions and gates are displayed, nothing
- *     here changes the live site.
- *   • Interventions — each eligibility clause (siteConfig.snowplow.interventionClauses)
- *     with a live met/unmet tick + a manual "trigger" button (persists across tabs)
+ *     Signals `demo_grocery` service. The read is SHARED with the site
+ *     (src/lib/intent-client.ts): shopper actions schedule debounced reads,
+ *     and this tab shows the latest one — fetching only when there is none
+ *     yet, or on an explicit "re-evaluate" (trigger `inspector`, always
+ *     tracked as classify_intent). Never polled: each call costs tokens.
+ *   • Interventions — the two phase-2 interventions (siteConfig.snowplow.interventions)
+ *     with their Signals rule, whether each fired this session, and a manual
+ *     trigger per intervention (persists across tabs)
  *
  * Visible to demo presenters only — polls /api/signals every few seconds while
  * open.
@@ -61,80 +67,9 @@ const WAREHOUSE_UNLOCK_ID =
 type SignalsAttributes = Record<string, unknown>;
 type WarehouseTab = 'stream' | 'warehouse' | 'intent';
 
-/** Shape returned by /api/intent (see that route + src/lib/intent.ts). */
-interface IntentResult {
-  configured: boolean;
-  source?: 'signals';
-  /**
-   * Why the panel looks the way it does. `live` is a real classification;
-   * `empty` means Signals answered but this session has no attributes yet
-   * (normal for a new session, NOT an error); the others are genuine problems.
-   */
-  source_status?: 'live' | 'empty' | 'unconfigured' | 'unreachable' | 'error';
-  service?: string;
-  attribute_key?: string;
-  session_id?: string | null;
-  /** Human-readable explanation for the non-`live` statuses. */
-  message?: string;
-  attributes?: Record<string, unknown>;
-  error?: string;
-  model?: string;
-  stage?: {
-    label: string;
-    jev_choice: string;
-    /** Set when Signals counters (checkout / purchase) overrode Jev. */
-    override: 'checking_out' | 'purchased' | null;
-    confidence: number;
-    probabilities: Record<string, number>;
-    enough_signal: boolean;
-    action: string | null;
-  };
-  occasion?: {
-    label: string;
-    jev_choice: string;
-    restock_split: 'weekly' | 'top_up' | null;
-    confidence: number;
-    probabilities: Record<string, number>;
-    enough_signal: boolean;
-    action: string | null;
-  };
-  persona?: {
-    label: string;
-    headline: string;
-    confidence: number;
-    traits: Record<string, number>;
-    active: string[];
-    plant_based: { probability: number; active: boolean };
-    enough_signal: boolean;
-    action: string | null;
-    filter: string | null;
-  };
-  /** Counts / totals for display — never part of the Jev state. */
-  metrics?: Record<string, number>;
-  state?: unknown;
-  /** Ordered session narrative from the Signals Event Log (Agentic Context)
-   *  that Jev read as `session_timeline`. Absent when the buffer was empty. */
-  session_timeline?: string;
-  usage?: { input_tokens: number; output_tokens: number };
-  evaluated_at?: string;
-}
-
 const pct = (n: number): string => `${Math.round(n * 100)}%`;
 
 // ─── Value formatting ─────────────────────────────────────────────────────────
-
-function unwrap(v: unknown): unknown {
-  return Array.isArray(v) && v.length === 1 ? v[0] : v;
-}
-
-function readNumber(attrs: SignalsAttributes | null, key: string): number | null {
-  if (!attrs) return null;
-  const v = unwrap(attrs[key]);
-  if (typeof v === 'number') return v;
-  if (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v)))
-    return Number(v);
-  return null;
-}
 
 function fmtList(v: unknown[]): string {
   if (v.length === 0) return '—';
@@ -155,24 +90,20 @@ function fmtValue(v: unknown): string {
   return String(v);
 }
 
-// ─── Intervention monitor (mirrors siteConfig.snowplow.interventionClauses) ────
-
-type EvaluatedClause = { label: string; value: string; met: boolean };
-
-function evaluateClauses(attrs: SignalsAttributes | null): EvaluatedClause[] {
-  return siteConfig.snowplow.interventionClauses.map((clause) => {
-    const value = readNumber(attrs, clause.attribute);
-    const v = value ?? 0;
-    let met = false;
-    switch (clause.operator) {
-      case 'gte': met = v >= clause.threshold; break;
-      case 'gt': met = v > clause.threshold; break;
-      case 'lte': met = v <= clause.threshold; break;
-      case 'lt': met = v < clause.threshold; break;
-      case 'eq': met = v === clause.threshold; break;
-    }
-    return { label: clause.label, value: value === null ? '—' : String(value), met };
-  });
+/** Fired-this-session map, kept live via the intervention CustomEvents. */
+function useFiredInterventions(): Record<string, FiredIntervention> {
+  const [fired, setFired] = useState<Record<string, FiredIntervention>>({});
+  useEffect(() => {
+    const sync = () => setFired(getFiredInterventions());
+    sync();
+    window.addEventListener(INTERVENTION_EVENT, sync);
+    window.addEventListener(INTERVENTION_CLEARED_EVENT, sync);
+    return () => {
+      window.removeEventListener(INTERVENTION_EVENT, sync);
+      window.removeEventListener(INTERVENTION_CLEARED_EVENT, sync);
+    };
+  }, []);
+  return fired;
 }
 
 export default function SignalsInspector() {
@@ -189,13 +120,12 @@ export default function SignalsInspector() {
   const [syncedAt, setSyncedAt] = useState<number | null>(null);
   const [now, setNow] = useState<number>(() => Date.now());
   const [configured, setConfigured] = useState<boolean>(true);
-  const [intent, setIntent] = useState<IntentResult | null>(null);
-  const [intentLoading, setIntentLoading] = useState(false);
+  const { result: intent, loading: intentLoading } = useIntent();
   const [stateOpen, setStateOpen] = useState(false);
   const intentFetchedRef = useRef(false);
+  const fired = useFiredInterventions();
 
   const { user } = useUser();
-  const { activityMeta } = useShop();
   const currentEmail = user?.email ?? null;
 
   const fetchAttributes = useCallback(async () => {
@@ -242,39 +172,10 @@ export default function SignalsInspector() {
     }
   }, [currentEmail]);
 
-  /**
-   * One /api/intent round trip. Manual only — on tab open and on the
-   * "re-evaluate" button. Never on an interval: each call costs tokens.
-   */
-  const fetchIntent = useCallback(async () => {
-    setIntentLoading(true);
-    try {
-      const meta = activityMeta();
-      const res = await fetch('/api/intent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          // The server reads everything semantic from the Signals service for
-          // this session id. Only the two counters Signals does not carry are
-          // sent from here (display-only panel metrics).
-          sessionId: getSessionId() ?? null,
-          pageCount: meta.pageCount,
-          sessionStartedAt: meta.startedAt,
-        }),
-      });
-      setIntent((await res.json()) as IntentResult);
-    } catch (e) {
-      console.error('Intent evaluation failed', e);
-      setIntent({
-        configured: true,
-        source: 'signals',
-        source_status: 'error',
-        error: 'Could not reach /api/intent.',
-      });
-    } finally {
-      setIntentLoading(false);
-    }
-  }, [activityMeta]);
+  /** Presenter refresh — an immediate read, always tracked (`inspector`). */
+  const fetchIntent = useCallback(() => {
+    void classifyIntent('inspector');
+  }, []);
 
   // Poll only while open.
   useEffect(() => {
@@ -294,7 +195,8 @@ export default function SignalsInspector() {
 
   const rows = attrs ? Object.entries(attrs) : [];
   const hasData = rows.length > 0 || !!sessionId;
-  const clauses = evaluateClauses(attrs);
+  const interventions = siteConfig.snowplow.interventions;
+  const intentAttrKeys = siteConfig.snowplow.intentAttributes;
 
   // ─── Warehouse (batch) tab gating ─────────────────────────────────────────
   const warehouse = siteConfig.warehouse;
@@ -316,17 +218,17 @@ export default function SignalsInspector() {
       : activeTab === 'intent' && intentEnabled
         ? 'intent'
         : 'stream';
-  // Refresh on tab open — once per open, then only via "re-evaluate". The ref
-  // stops the basket changing under us from triggering a fresh (paid) call.
+  // On tab open, read only if nothing has been read yet — the site's own
+  // debounced reads keep the shared result fresh. Then only via "re-evaluate".
   useEffect(() => {
     if (!open || effectiveTab !== 'intent') {
       if (effectiveTab !== 'intent') intentFetchedRef.current = false;
       return;
     }
-    if (intentFetchedRef.current) return;
+    if (intentFetchedRef.current || intent || intentLoading) return;
     intentFetchedRef.current = true;
     fetchIntent();
-  }, [open, effectiveTab, fetchIntent]);
+  }, [open, effectiveTab, fetchIntent, intent, intentLoading]);
 
   const warehouseRows =
     warehouse.source === 'service'
@@ -545,12 +447,41 @@ export default function SignalsInspector() {
                 ) : (
                   /* Stream attributes */
                   <section>
+                    {intentAttrKeys.length > 0 && (
+                      <div className="mb-4">
+                        <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-heading">
+                          <Gauge className="h-3 w-3" /> shopper intent
+                        </h4>
+                        <div className="space-y-2">
+                          {intentAttrKeys.map((key) => (
+                            <div
+                              key={key}
+                              className="flex items-start justify-between gap-3"
+                            >
+                              <code className="break-all font-mono text-xs text-muted">
+                                {key}
+                              </code>
+                              <span className="break-words text-right font-bold text-heading">
+                                {fmtValue(attrs?.[key])}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        {intentAttrKeys.every((k) => attrs?.[k] == null) && (
+                          <p className="mt-2 font-mono text-[9.5px] text-muted/70">
+                            grocery_shopper_intent · not served yet
+                          </p>
+                        )}
+                      </div>
+                    )}
                     <h4 className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-heading">
                       <Zap className="h-3 w-3" /> stream attributes
                     </h4>
                     {rows.length > 0 ? (
                       <div className="space-y-2.5">
-                        {rows.map(([key, value]) => (
+                        {rows
+                          .filter(([key]) => !intentAttrKeys.includes(key))
+                          .map(([key, value]) => (
                           <div
                             key={key}
                             className="flex items-start justify-between gap-3"
@@ -572,64 +503,70 @@ export default function SignalsInspector() {
                   </section>
                 )}
 
-                {clauses.length > 0 && (
+                {interventions.length > 0 && (
                   <>
                     <hr className="border-border" />
 
-                    {/* Intervention monitor */}
+                    {/* Interventions — Signals owns the rule; presenter can
+                        fire either on demand (copy uses the latest read). */}
                     <section>
                       <div className="mb-3 flex items-center justify-between gap-3">
                         <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-heading">
-                          <Activity className="h-3 w-3" /> intervention
+                          <Activity className="h-3 w-3" /> interventions
                         </h4>
                         <button
-                          onClick={() => triggerIntervention()}
-                          className="cursor-pointer rounded-full bg-primary px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-inverse transition-colors hover:bg-highlight"
+                          onClick={() => clearIntervention()}
+                          className="cursor-pointer text-[10px] font-semibold uppercase tracking-wider text-muted hover:text-heading"
                         >
-                          trigger
+                          clear
                         </button>
                       </div>
-                      <code
-                        className="mb-3 block truncate font-mono text-[10px] text-muted"
-                        title={INTERVENTION_NAME}
-                      >
-                        {INTERVENTION_NAME}
-                      </code>
-                      <ul className="space-y-2.5">
-                        {clauses.map((clause) => (
-                          <li
-                            key={clause.label}
-                            className="flex items-start justify-between gap-3"
-                          >
-                            <span className="flex min-w-0 items-start gap-2">
-                              <span
-                                className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                                  clause.met
-                                    ? 'border-transparent bg-primary'
-                                    : 'border-muted bg-transparent'
-                                }`}
-                              >
-                                {clause.met && (
-                                  <Check
-                                    className="h-3 w-3 text-inverse"
-                                    strokeWidth={3}
-                                  />
-                                )}
-                              </span>
-                              <code className="break-all font-mono text-xs text-muted">
-                                {clause.label}
-                              </code>
-                            </span>
-                            <span
-                              className={`max-w-[9rem] shrink-0 truncate text-right font-bold ${
-                                clause.met ? 'text-heading' : 'text-primary'
-                              }`}
-                              title={clause.value}
-                            >
-                              {clause.value}
-                            </span>
-                          </li>
-                        ))}
+                      <ul className="space-y-3">
+                        {interventions.map((iv) => {
+                          const hit = fired[iv.name];
+                          return (
+                            <li key={iv.name} className="space-y-1">
+                              <div className="flex items-start justify-between gap-3">
+                                <span className="flex min-w-0 items-start gap-2">
+                                  <span
+                                    className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                                      hit
+                                        ? 'border-transparent bg-primary'
+                                        : 'border-muted bg-transparent'
+                                    }`}
+                                  >
+                                    {hit && (
+                                      <Check
+                                        className="h-3 w-3 text-inverse"
+                                        strokeWidth={3}
+                                      />
+                                    )}
+                                  </span>
+                                  <code
+                                    className="break-all font-mono text-xs text-heading"
+                                    title={iv.name}
+                                  >
+                                    {iv.name}
+                                  </code>
+                                </span>
+                                <button
+                                  onClick={() => triggerIntervention(iv.name)}
+                                  className="shrink-0 cursor-pointer rounded-full bg-primary px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-inverse transition-colors hover:bg-highlight"
+                                >
+                                  trigger
+                                </button>
+                              </div>
+                              <p className="pl-6 font-mono text-[10px] leading-snug text-muted">
+                                {iv.rule}
+                              </p>
+                              <p className="pl-6 font-mono text-[9.5px] text-muted/70">
+                                {hit
+                                  ? `fired this session · ${hit.source === 'signals' ? 'signals push' : 'manual'} · ${new Date(hit.at).toLocaleTimeString()}`
+                                  : 'not fired this session'}
+                              </p>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </section>
                   </>
@@ -658,8 +595,8 @@ export default function SignalsInspector() {
 /* ---------------------------------------------------------------------------
  * Intent panel — TypeSafe (Jev)
  *
- * Shows the stage and occasion choices with their full distributions, the
- * persona trait nouls, and the exact state that was posted — so a presenter
+ * Shows the code-derived stage (and the rule that fired), the occasion choice
+ * with its full distribution, the persona trait nouls, and the exact state that was posted — so a presenter
  * can show what Jev actually saw.
  * ------------------------------------------------------------------------- */
 
@@ -960,39 +897,28 @@ function IntentPanel({
 
       <hr className="border-border" />
 
-      {/* Stage — Jev's choice, unless Signals counters say checkout/purchase */}
+      {/* Stage — ordered rules over Signals facts, not a Jev read */}
       {stage && (
         <IntentSection
-          title="stage · choice"
+          title="stage · rules (signals)"
           right={
             <span className="font-mono text-[10px] tabular-nums text-muted">
-              conf {pct(stage.confidence)}
+              code
             </span>
           }
         >
           <LabelLine
-            label={stage.label}
+            label={stage.enough_signal ? `${stage.label} — ${stage.rule}` : stage.label}
             enough={stage.enough_signal}
             gate="≥2 views/searches or ≥1 add"
           />
-          {stage.override && (
-            <p className="-mt-1 mb-2 font-mono text-[9.5px] text-muted">
-              set in code from Signals counters · jev read {stage.jev_choice}
-            </p>
-          )}
           <ActionLine action={stage.action} />
-          <ul className="space-y-2">
-            {Object.entries(stage.probabilities)
-              .sort((a, b) => b[1] - a[1])
-              .map(([label, p]) => (
-                <DistRow
-                  key={label}
-                  label={label}
-                  value={p}
-                  selected={stage.enough_signal && label === stage.jev_choice}
-                />
-              ))}
-          </ul>
+          <p className="font-mono text-[9.5px] leading-relaxed text-muted">
+            first match: purchased / checking_out (counters) → hesitating
+            (removed, not re-added) → ready_to_buy (≥
+            {intentPolicy.stage.readyMinItems} items) → on_a_mission (searched,
+            then added) → browsing
+          </p>
         </IntentSection>
       )}
 

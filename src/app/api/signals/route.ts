@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
   const meta = {
     service: siteConfig.snowplow.signalsService,
     attribute_key: siteConfig.snowplow.signalsAttributeKey,
-    intervention: siteConfig.snowplow.interventionName,
+    interventions: siteConfig.snowplow.interventions.map((i) => i.name),
     signals_configured: isSignalsConfigured(),
     synced_at: new Date().toISOString(),
   };

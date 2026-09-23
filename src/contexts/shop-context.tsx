@@ -24,6 +24,7 @@ import {
   trackRemoveFromBasketEvent,
   trackTransactionEvent,
 } from '@/lib/tracking';
+import { scheduleIntentRead, setIntentMetaSource } from '@/lib/intent-client';
 
 /* ---------------------------------------------------------------------------
  * Basket state + session activity.
@@ -261,6 +262,8 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       const after = subtotalOf(next);
       if (delta > 0) trackAddToBasketEvent(product, delta, after);
       else trackRemoveFromBasketEvent(product, -delta, after);
+      // Phase 2: basket changes are intent evidence — debounced Jev read.
+      scheduleIntentRead(delta > 0 ? 'add_to_cart' : 'remove_from_cart');
     },
     [subtotalOf]
   );
@@ -448,6 +451,13 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     }),
     []
   );
+
+  // The intent client (src/lib/intent-client.ts) posts these counters with
+  // every /api/intent read, whoever triggers it.
+  useEffect(() => {
+    setIntentMetaSource(activityMeta);
+    return () => setIntentMetaSource(null);
+  }, [activityMeta]);
 
   // ─── Order ───────────────────────────────────────────────────────────────
 

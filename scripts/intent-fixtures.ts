@@ -1,5 +1,8 @@
 /**
- * Signals-shaped intent fixtures (12 from the spec + foodie traps) for scripts/eval-intent.ts.
+ * Signals-shaped intent fixtures (the spec's journeys + traps) for scripts/eval-intent.ts.
+ *
+ * `stage` expectations are checked against the code rules (deriveStage) —
+ * no Jev; everything else against the live Jev read.
  *
  * Each fixture is written as a JOURNEY — an ordered list of the ecommerce
  * events the site would send — and compiled here into exactly what the route
@@ -35,7 +38,7 @@ export type JourneyEvent =
   | { type: 'purchase' };
 
 export interface Expectation {
-  /** One label, or several acceptable ones (any of them may win). */
+  /** Code-derived stage (deriveStage): one label, or several acceptable. */
   stage?: string | string[];
   /** Jev's occasion; for restock use `restock:weekly` / `restock:top_up`. */
   occasion?: string;
@@ -89,8 +92,8 @@ export const FIXTURES: Fixture[] = [
   },
   {
     id: 3,
-    // Spec says olive oil too, but the catalogue has only one olive oil —
-    // coffee has three ranges (Basics / Select ground / Select beans).
+    // Was the "comparing" fixture. Stage is now code rules, which can't
+    // honestly detect comparing — a search with nothing added is browsing.
     name: 'coffee: Basics vs Select ground vs Select beans, back and forth',
     journey: [
       { type: 'search', query: 'coffee' },
@@ -100,7 +103,7 @@ export const FIXTURES: Fixture[] = [
       { type: 'view', name: 'Instant Coffee' },
       { type: 'view', name: 'Colombian Ground Coffee' },
     ],
-    expect: { stage: 'comparing' },
+    expect: { stage: 'browsing' },
   },
   {
     id: 4,
@@ -193,7 +196,7 @@ export const FIXTURES: Fixture[] = [
       { type: 'view', name: 'Dark Chocolate 70%' },
       { type: 'add', name: 'Dark Chocolate 70%' },
     ],
-    expect: { occasion: 'meal', traitsHigh: ['foodie_explorer'] },
+    expect: { occasion: 'meal' },
   },
   {
     id: 10,
@@ -249,11 +252,12 @@ export const FIXTURES: Fixture[] = [
       { type: 'add', name: 'All-Butter Croissants' },
       { type: 'add', name: 'Organic Hass Avocados' },
     ],
-    expect: { traitsHigh: ['budget_driven', 'foodie_explorer'] },
+    expect: { traitsHigh: ['budget_driven'] },
   },
   {
     id: 13,
-    name: 'TRAP: plain everyday basket + one Select item',
+    // Was a foodie trap; now checks restock + the ready_to_buy rule.
+    name: 'plain everyday basket + one Select item',
     journey: [
       'Semi-Skimmed Milk',
       'Free-Range Large Eggs',
@@ -262,18 +266,19 @@ export const FIXTURES: Fixture[] = [
       'Soft White Rolls',
       'Colombian Ground Coffee',
     ].map((name) => ({ type: 'add' as const, name })),
-    expect: { traitsLow: ['foodie_explorer'] },
+    expect: { stage: 'ready_to_buy', occasion: 'restock:top_up' },
   },
   {
     id: 14,
-    name: 'TRAP: browse-only, viewing Select items, nothing added',
+    // Was a foodie trap; now checks the browsing rule + the persona gate.
+    name: 'browse-only, viewing Select items, nothing added',
     journey: [
       { type: 'view', name: 'Aged Parmigiano Reggiano' },
       { type: 'view', name: 'White Truffle Oil' },
       { type: 'view', name: 'Champagne Brut' },
       { type: 'view', name: 'Luxury Belgian Chocolates' },
     ],
-    expect: { notHeadline: 'foodie_explorer' },
+    expect: { stage: 'browsing', notHeadline: 'budget_driven' },
   },
   {
     id: 15,
@@ -295,6 +300,20 @@ export const FIXTURES: Fixture[] = [
       { type: 'add', name: 'Mozzarella Ball' },
     ],
     expect: { stage: ['ready_to_buy', 'on_a_mission'], occasion: 'meal' },
+  },
+  {
+    id: 16,
+    // Everyday staples that COULD be cooked together, but no dish search and
+    // no dish-specific ingredient — the meal/restock boundary.
+    name: 'TRAP: pasta, chopped tomatoes, milk, bread, cheddar — no search',
+    journey: [
+      'Wholewheat Penne',
+      'Italian Chopped Tomatoes',
+      'Semi-Skimmed Milk',
+      'White Sliced Bread',
+      'Mature Cheddar',
+    ].map((name) => ({ type: 'add' as const, name })),
+    expect: { stage: 'ready_to_buy', occasion: 'restock:top_up' },
   },
 ];
 
